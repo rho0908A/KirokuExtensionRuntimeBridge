@@ -35,8 +35,9 @@ Node, Python or web runtime anywhere in this project.
 
 * **Builds are green.** The `Android` workflow runs `gradle test` and assembles
   `:runtime-host:assembleDebug`, `:sample-host:assembleDebug`, `:bridge-sdk:assembleRelease` and
-  `:bridge-ipc:assembleRelease` on every push to `main`. Downloads for the APKs/AARs are on the
-  run page under **Artifacts → `kiroku-runtime-bridge`**.
+  `:bridge-ipc:assembleRelease` on every push to `main`. The installable APK and the two SDK
+  libraries are attached to [Releases](https://github.com/rho0908A/KirokuExtensionRuntimeBridge/releases);
+  debug builds and the sample client are on the run page under **Artifacts → `kiroku-runtime-bridge`**.
 * **Runtime behaviour is not verified on hardware.** No device or emulator test has been run:
   extension loading, playback and the Binder round trip are implemented against the real APIs and
   compile, but treat them as unverified until the checklist in `docs/troubleshooting.md` has been
@@ -77,8 +78,9 @@ There are two halves: the **Runtime Host APK**, which owns extension loading and
 
 ### 1. Get the runtime APK
 
-Either build `:runtime-host:assembleDebug` or download the APK from the latest green
-[Android workflow run](https://github.com/rho0908A/KirokuExtensionRuntimeBridge/actions/workflows/android.yml).
+Download `KirokuRuntimeHost-<version>.apk` from the latest
+[release](https://github.com/rho0908A/KirokuExtensionRuntimeBridge/releases) (one APK, no debug
+variant), or build `:runtime-host:assembleRelease` yourself.
 Ship it next to your app (bundled asset, your own download link, or the Play/F-Droid store under a
 separate package). It must be installed and the user must launch it once.
 

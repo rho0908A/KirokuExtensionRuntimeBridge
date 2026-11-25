@@ -79,10 +79,10 @@ jobs:
           VERSION="$(grep -m1 'versionName = "' runtime-host/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')"
           echo "Version: $VERSION"
           mkdir -p dist
-          cp runtime-host/build/outputs/apk/debug/runtime-host-debug.apk "dist/KirokuRuntimeHost-$VERSION-debug.apk"
+          # Exactly one installable APK: the Runtime Host release build. Debug builds and the sample
+          # client stay as CI workflow artifacts only, so the release page has no duplicates.
           cp runtime-host/build/outputs/apk/release/runtime-host-release.apk "dist/KirokuRuntimeHost-$VERSION.apk"
-          cp sample-host/build/outputs/apk/debug/sample-host-debug.apk "dist/KirokuSampleHost-$VERSION-debug.apk"
-          cp sample-host/build/outputs/apk/release/sample-host-release.apk "dist/KirokuSampleHost-$VERSION.apk"
+          # Libraries for host apps that bind to the Runtime Host (not installable).
           cp bridge-sdk/build/outputs/aar/bridge-sdk-release.aar "dist/bridge-sdk-$VERSION.aar"
           cp bridge-ipc/build/outputs/aar/bridge-ipc-release.aar "dist/bridge-ipc-$VERSION.aar"
           ls -l dist
