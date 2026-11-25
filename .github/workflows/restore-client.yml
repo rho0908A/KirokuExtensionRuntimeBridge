@@ -1,0 +1,62 @@
+name: Restore bridge client
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore and patch sources
+        run: |
+          set -euo pipefail
+          git config user.name "rho0908A"
+          git config user.email "neprochan@gmail.com"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          bridge = Path("bridge-sdk/src/main/kotlin/io/kiroku/runtime/bridge/client/KirokuRuntimeBridge.kt")
+          source = Path("runtime-host/src/main/kotlin/io/kiroku/runtime/host/ui/components/Components.kt")
+
+          restored = __import__("subprocess").check_output(
+              ["git", "show", "37b9aed:" + str(bridge)], text=True
+          )
+
+          helper = (
+              "    private suspend fun call(\n"
+              "        method: String,\n"
+              "        params: kotlinx.serialization.json.JsonObject,\n"
+              "    ): JsonElement = execute(method, params, config.operationTimeoutMs)\n\n"
+          )
+          needle = "    private suspend fun <T> callForList("
+          assert needle in restored, "callForList anchor missing"
+          assert "fun call(" not in restored, "call() helper already present"
+          bridge.write_text(restored.replace(needle, helper + needle, 1))
+
+          text = source.read_text()
+          icon_import = "import androidx.compose.material3.Icon\n"
+          icon_imports = (
+              "import androidx.compose.material.icons.Icons\n"
+              "import androidx.compose.material.icons.filled.ChevronRight\n"
+          )
+          assert icon_import in text, "Icon import anchor missing"
+          assert "Icons.Filled.ChevronRight" not in text, "ChevronRight already applied"
+          text = text.replace(icon_import, icon_imports + icon_import, 1)
+          text = text.replace(
+              "androidx.compose.material.icons.Icons.Filled.KeyboardArrowRight",
+              "Icons.Filled.ChevronRight",
+          )
+          source.write_text(text)
+          PY
+
+          git rm -q .github/workflows/restore-client.yml
+          git add -A
+          git commit -m "Restore the runtime bridge client and fix the chevron icon reference"
+          git push origin HEAD:main
