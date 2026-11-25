@@ -5,9 +5,14 @@ on:
     branches: ["main"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Tag for a GitHub Release with the built APK/AAR assets (for example v1.0.0). Leave empty to only build."
+        required: false
+        default: ""
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -47,7 +52,9 @@ jobs:
         run: >
           gradle --no-daemon
           :runtime-host:assembleDebug
+          :runtime-host:assembleRelease
           :sample-host:assembleDebug
+          :sample-host:assembleRelease
           :bridge-sdk:assembleRelease
           :bridge-ipc:assembleRelease
 
@@ -57,8 +64,38 @@ jobs:
           name: kiroku-runtime-bridge
           path: |
             runtime-host/build/outputs/apk/debug/*.apk
+            runtime-host/build/outputs/apk/release/*.apk
             sample-host/build/outputs/apk/debug/*.apk
+            sample-host/build/outputs/apk/release/*.apk
             bridge-sdk/build/outputs/aar/*.aar
             bridge-ipc/build/outputs/aar/*.aar
             **/build/reports/tests/**
           if-no-files-found: error
+
+      - name: Stage release files
+        if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+        run: |
+          set -euo pipefail
+          VERSION="$(grep -m1 'versionName = "' runtime-host/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')"
+          echo "Version: $VERSION"
+          mkdir -p dist
+          cp runtime-host/build/outputs/apk/debug/runtime-host-debug.apk "dist/KirokuRuntimeHost-$VERSION-debug.apk"
+          cp runtime-host/build/outputs/apk/release/runtime-host-release.apk "dist/KirokuRuntimeHost-$VERSION.apk"
+          cp sample-host/build/outputs/apk/debug/sample-host-debug.apk "dist/KirokuSampleHost-$VERSION-debug.apk"
+          cp sample-host/build/outputs/apk/release/sample-host-release.apk "dist/KirokuSampleHost-$VERSION.apk"
+          cp bridge-sdk/build/outputs/aar/bridge-sdk-release.aar "dist/bridge-sdk-$VERSION.aar"
+          cp bridge-ipc/build/outputs/aar/bridge-ipc-release.aar "dist/bridge-ipc-$VERSION.aar"
+          ls -l dist
+
+      - name: Publish GitHub release
+        if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" dist/* \
+            --title "Kiroku Runtime Bridge $TAG" \
+            --notes-file .github/RELEASE_NOTES.md \
+            --target "$GITHUB_SHA" \
+            --latest
