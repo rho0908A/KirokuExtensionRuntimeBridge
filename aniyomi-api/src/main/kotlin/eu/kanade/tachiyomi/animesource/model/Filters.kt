@@ -1,8 +1,23 @@
 package eu.kanade.tachiyomi.animesource.model
 
 /**
- * Filter model mirroring Aniyomi's `AnimeFilter` hierarchy. Extensions build these lists and the
- * runtime applies host-supplied state before calling `getSearchAnime`.
+ * Ordered collection of filters handed to a source's search method.
+ *
+ * Anikku made this a `List` delegate (`data class AnimeFilterList(val list: List<AnimeFilter<*>>) :
+ * List<AnimeFilter<*>> by list`), which extensions rely on when they iterate the list.
+ */
+data class AnimeFilterList(val list: List<AnimeFilter<*>>) : List<AnimeFilter<*>> by list {
+
+    constructor(vararg fs: AnimeFilter<*>) : this(if (fs.isNotEmpty()) fs.asList() else emptyList())
+
+    override fun equals(other: Any?): Boolean = false
+
+    override fun hashCode(): Int = list.hashCode()
+}
+
+/**
+ * Filter model mirroring Anikku's `AnimeFilter` hierarchy. Extensions build these lists and pass
+ * them to `getSearchAnime`; the runtime keeps the extension's own state.
  */
 open class AnimeFilter<T>(val name: String, var state: T) {
 
@@ -36,27 +51,4 @@ open class AnimeFilter<T>(val name: String, var state: T) {
         const val STATE_INCLUDE = 1
         const val STATE_EXCLUDE = 2
     }
-}
-
-/** Ordered collection of filters handed to a source's search method. */
-class AnimeFilterList(vararg filters: AnimeFilter<*>) {
-
-    val list: MutableList<AnimeFilter<*>> = filters.toMutableList()
-
-    val size: Int get() = list.size
-
-    fun add(filter: AnimeFilter<*>) {
-        list.add(filter)
-    }
-
-    fun addAll(filters: List<AnimeFilter<*>>) {
-        list.addAll(filters)
-    }
-
-    fun get(index: Int): AnimeFilter<*> = list[index]
-
-    operator fun plus(other: AnimeFilterList): AnimeFilterList =
-        AnimeFilterList(*list.toTypedArray(), *other.list.toTypedArray())
-
-    fun isEmpty(): Boolean = list.isEmpty()
 }
