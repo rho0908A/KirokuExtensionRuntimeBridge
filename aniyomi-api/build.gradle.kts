@@ -4,12 +4,14 @@ plugins {
 }
 
 /**
- * Binary compatibility layer for Aniyomi "lib 12..17" anime extensions.
+ * Binary compatibility layer for extension APKs.
  *
- * Aniyomi does not publish `extensions-lib` to a public Maven repository (the JitPack build only
- * produces an empty root jar), while extensions are compiled with those classes as `compileOnly`
- * and therefore expect the *host* to provide them at runtime. This module is that host-side API:
- * the same package names, types and method signatures the extensions were compiled against.
+ * Neither Aniyomi nor Anikku publishes a usable `extensions-lib` artifact while extensions are built
+ * with it as `compileOnly`, so the host has to provide these classes at runtime. This module
+ * reproduces the API of the maintained hosts:
+ *
+ *  - anime: Anikku `eu.kanade.tachiyomi.animesource` (extensions-lib 12..16)
+ *  - manga: Mihon  `eu.kanade.tachiyomi.source`      (extensions-lib 1.4..1.6)
  *
  * Keep this module free of extension-specific logic: it is an API surface, not a backend.
  */
@@ -39,6 +41,8 @@ dependencies {
     api(libs.kotlinx.coroutines.core)
     api(libs.kotlinx.serialization.json)
     api("androidx.preference:preference-ktx:1.2.1")
+    // Anime (Anikku) and manga (Mihon 1.4) extension APIs expose RxJava 1 observables.
+    api("io.reactivex:rxjava:1.3.8")
 
     testImplementation(libs.junit)
 }
