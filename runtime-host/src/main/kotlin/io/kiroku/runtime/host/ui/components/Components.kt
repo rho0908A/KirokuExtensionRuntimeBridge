@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -135,7 +137,7 @@ fun ActionRow(
             Text(description, fontSize = 12.sp, color = TextSecondary)
         }
         Icon(
-            imageVector = androidx.compose.material.icons.Icons.Filled.KeyboardArrowRight,
+            imageVector = Icons.Filled.ChevronRight,
             contentDescription = null,
             tint = TextSecondary,
         )
