@@ -1,6 +1,13 @@
-## Kiroku Runtime Bridge 1.1.0
+## Kiroku Runtime Bridge 1.1.1
 
-### What's new
+### Fixed
+
+* **Startup crash on 1.1.0 (`NoClassDefFoundError: kotlin/jvm/internal/KotlinGenericDeclaration`).**
+  The APK packaged `kotlin-reflect` 2.4.0 from the CloudStream library next to a 2.2.20 Kotlin stdlib.
+  Reflect 2.4 implements interfaces that only exist in its own stdlib, so the Host crashed while
+  creating the first ViewModel. All Kotlin runtime artifacts are now pinned to one version.
+
+### Features
 
 * **Manga extensions.** Mihon manga extension APKs (`tachiyomi.extension`, extensions-lib 1.4–1.6)
   load and execute in the same runtime as the anime ones. The SDK gained `searchManga`,
@@ -18,9 +25,9 @@
 
 | Asset | What it is |
 | --- | --- |
-| `KirokuRuntimeHost-1.1.0.apk` | The **only installable file**. The Runtime Host app: runs Aniyomi/Anikku anime extensions, Mihon manga extensions and CloudStream `.cs3` plugins in a separate, isolated process. |
-| `bridge-sdk-1.1.0.aar` | Library for your own app. Contains `io.kiroku.runtime.bridge.ExtensionBridge` and the Binder client. Not installable. |
-| `bridge-ipc-1.1.0.aar` | Library for your own app. Shared IPC models, manga models and the AIDL service interface. Not installable — the SDK needs it next to it. |
+| `KirokuRuntimeHost-1.1.1.apk` | The **only installable file**. The Runtime Host app: runs Aniyomi/Anikku anime extensions, Mihon manga extensions and CloudStream `.cs3` plugins in a separate, isolated process. |
+| `bridge-sdk-1.1.1.aar` | Library for your own app. Contains `io.kiroku.runtime.bridge.ExtensionBridge` and the Binder client. Not installable. |
+| `bridge-ipc-1.1.1.aar` | Library for your own app. Shared IPC models, manga models and the AIDL service interface. Not installable — the SDK needs it next to it. |
 
 The AARs are the "SDK" side of the project. An APK is an app you install; an AAR is compiled library
 code you reference from an app you build yourself. If you only want to use the Runtime Host, download
@@ -31,7 +38,7 @@ Debug builds and the sample client are not published here — they are available
 
 ### Install
 
-1. Install `KirokuRuntimeHost-1.1.0.apk` on an Android 8.0+ (API 26) device.
+1. Install `KirokuRuntimeHost-1.1.1.apk` on an Android 8.0+ (API 26) device.
 2. Open the Runtime Host, go to **Repositories** and load the catalogue, then install Aniyomi/Anikku
    anime extensions or Mihon manga extensions from it (or use **Extensions → Load extension APK** for
    a file you already have).
@@ -45,8 +52,8 @@ Put both AARs into your app's `libs/` folder:
 
 ```kotlin
 dependencies {
-    implementation(files("libs/bridge-sdk-1.1.0.aar"))
-    implementation(files("libs/bridge-ipc-1.1.0.aar"))
+    implementation(files("libs/bridge-sdk-1.1.1.aar"))
+    implementation(files("libs/bridge-ipc-1.1.1.aar"))
 }
 ```
 

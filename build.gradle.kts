@@ -20,6 +20,10 @@ subprojects {
                 "org.jetbrains.kotlin:kotlin-stdlib:${libs.versions.kotlin.get()}",
                 "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${libs.versions.kotlin.get()}",
                 "org.jetbrains.kotlin:kotlin-stdlib-jdk8:${libs.versions.kotlin.get()}",
+                // kotlin-reflect must match the stdlib exactly: a newer reflect implements interfaces
+                // that only exist in its own stdlib, so a mismatched pair crashes at startup with
+                // NoClassDefFoundError: kotlin/jvm/internal/KotlinGenericDeclaration.
+                "org.jetbrains.kotlin:kotlin-reflect:${libs.versions.kotlin.get()}",
                 "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}",
                 "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:${libs.versions.coroutines.get()}",
                 "org.jetbrains.kotlinx:kotlinx-coroutines-android:${libs.versions.coroutines.get()}",
