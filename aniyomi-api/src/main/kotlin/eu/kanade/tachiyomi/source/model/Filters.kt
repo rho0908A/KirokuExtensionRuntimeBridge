@@ -57,6 +57,10 @@ class FilterList(vararg filters: Filter<*>) : List<Filter<*>> {
 
     override fun get(index: Int): Filter<*> = items[index]
 
+    override fun contains(element: Filter<*>): Boolean = items.contains(element)
+
+    override fun containsAll(elements: Collection<Filter<*>>): Boolean = items.containsAll(elements)
+
     override fun indexOf(element: Filter<*>): Int = items.indexOf(element)
 
     override fun lastIndexOf(element: Filter<*>): Int = items.lastIndexOf(element)
