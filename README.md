@@ -31,13 +31,25 @@ The bridge is independent of Kiroku (or any other player). Kiroku is simply the 
 Everything is Kotlin + Gradle Kotlin DSL + native Android APIs. There is no Dart, React Native,
 Node, Python or web runtime anywhere in this project.
 
+## What's new in 1.1.0
+
+* **Manga extensions.** Mihon manga APKs (`tachiyomi.extension`, lib 1.4–1.6) load and execute next to
+  the anime ones, and the SDK gained `searchManga`, `popularManga`, `latestManga`, `getMangaDetails`,
+  `getChapters` and `getPages`.
+* **Anime layer retargeted to Anikku** (`komikku-app/anikku`, extensions-lib 12–16) instead of the
+  archived Aniyomi app. The backend keeps the `aniyomi` name, so host integrations do not change.
+* **Real repository indexes.** `repo.json` → `index_v2` → gzipped `index.pb` is decoded, so
+  Keiyoushi's catalogue lists real manga extensions instead of the two placeholder entries that
+  `index.min.json` now contains.
+
 ## Status (read this before trusting it)
 
 * **Builds are green.** The `Android` workflow runs `gradle test` and assembles
   `:runtime-host:assembleDebug`, `:sample-host:assembleDebug`, `:bridge-sdk:assembleRelease` and
   `:bridge-ipc:assembleRelease` on every push to `main`. The installable APK and the two SDK
-  libraries are attached to [Releases](https://github.com/rho0908A/KirokuExtensionRuntimeBridge/releases);
-  debug builds and the sample client are on the run page under **Artifacts → `kiroku-runtime-bridge`**.
+  libraries for the current version (`1.1.0`) are attached to
+  [Releases](https://github.com/rho0908A/KirokuExtensionRuntimeBridge/releases); debug builds and the
+  sample client are on the run page under **Artifacts → `kiroku-runtime-bridge`**.
 * **Runtime behaviour is not verified on hardware.** No device or emulator test has been run:
   extension loading, playback and the Binder round trip are implemented against the real APIs and
   compile, but treat them as unverified until the checklist in `docs/troubleshooting.md` has been
@@ -94,6 +106,10 @@ separate package). It must be installed and the user must launch it once.
 
 ### 2. Add the SDK to your app
 
+The release page publishes both libraries with the release version in their names, so the fastest
+path is to download `bridge-sdk-1.1.0.aar` and `bridge-ipc-1.1.0.aar` into `app/libs/`. To build them
+yourself instead:
+
 ```bash
 gradle :bridge-sdk:assembleRelease :bridge-ipc:assembleRelease
 cp bridge-sdk/build/outputs/aar/bridge-sdk-release.aar  app/libs/
@@ -113,8 +129,9 @@ android {
 }
 
 dependencies {
-    implementation(files("libs/bridge-sdk-release.aar"))
-    implementation(files("libs/bridge-ipc-release.aar"))
+    // names as published on the release page; rename if you built the AARs yourself
+    implementation(files("libs/bridge-sdk-1.1.0.aar"))
+    implementation(files("libs/bridge-ipc-1.1.0.aar"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }
 ```
@@ -191,6 +208,35 @@ streams.forEach { stream ->
   unchanged. `url` is nullable for models the extension built itself, so fall back to `id`.
 * `StreamSource` also carries `subtitles`, `audioTracks`, `mimeType`, `isM3u8`, `isDash` and
   `qualityValue`. Playback belongs to your app; the runtime only returns what the extension found.
+
+### 6b. Manga sources (Mihon)
+
+Sources that need manga calls set `extension.capabilities.manga = true`; those are Mihon APKs
+(`tachiyomi.extension`, lib 1.4–1.6). Anime sources answer the calls above, manga sources answer the
+calls below, and calling the wrong half throws `EXTENSION_UNSUPPORTED` — check the capability first:
+
+```kotlin
+val mangaExtensions = bridge.getExtensions().filter { it.capabilities.manga }
+val extension = mangaExtensions.first { it.loadError == null }
+
+val mangas   = bridge.searchManga(extension.id, "frieren")      // also popularManga() / latestManga()
+val manga    = mangas.first()
+val details  = bridge.getMangaDetails(extension.id, manga.id)
+val chapters = bridge.getChapters(extension.id, manga.id)
+val pages    = bridge.getPages(extension.id, chapters.first().id)
+
+pages.forEach { page ->
+    imageLoader.load(page.imageUrl ?: page.url, page.headers)   // forward the headers
+}
+```
+
+* `Manga.id`, `Chapter.id` and `MangaPage.url` are the extension's own values — send them back
+  unchanged. As with anime, pass the third argument `sourceId` when the extension exposes several
+  sources.
+* `MangaPage` carries its own `headers` (Referer/User-Agent); the image loader must forward them or
+  many sources return 403.
+* The runtime only resolves page URLs. Downloading, CBZ storage and the reader are the host app's
+  job.
 
 ### 7. Install and update extensions
 
