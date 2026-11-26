@@ -12,6 +12,7 @@ import io.kiroku.runtime.host.core.toExtensionError
 import io.kiroku.runtime.ipc.Anime
 import io.kiroku.runtime.ipc.AnimeDetails
 import io.kiroku.runtime.ipc.BackendType
+import io.kiroku.runtime.ipc.Chapter
 import io.kiroku.runtime.ipc.Episode
 import io.kiroku.runtime.ipc.ErrorCode
 import io.kiroku.runtime.ipc.Extension
@@ -20,6 +21,9 @@ import io.kiroku.runtime.ipc.ExtensionRepository
 import io.kiroku.runtime.ipc.IRuntimeCallback
 import io.kiroku.runtime.ipc.IRuntimeHost
 import io.kiroku.runtime.ipc.LogEntry
+import io.kiroku.runtime.ipc.Manga
+import io.kiroku.runtime.ipc.MangaDetails
+import io.kiroku.runtime.ipc.MangaPage
 import io.kiroku.runtime.ipc.RepositoryExtension
 import io.kiroku.runtime.ipc.RpcRequest
 import io.kiroku.runtime.ipc.RpcResponse
@@ -246,6 +250,61 @@ class RuntimeHostService : Service() {
                 extensionId = request.requireString(RuntimeParams.EXTENSION_ID),
                 sourceId = request.string(RuntimeParams.SOURCE_ID),
                 episodeUrl = request.requireString(RuntimeParams.EPISODE_ID),
+            ),
+        )
+
+        RuntimeMethods.MANGA_SEARCH -> json.encodeToJsonElement(
+            ListSerializer(Manga.serializer()),
+            manager.searchManga(
+                extensionId = request.requireString(RuntimeParams.EXTENSION_ID),
+                sourceId = request.string(RuntimeParams.SOURCE_ID),
+                query = request.requireString(RuntimeParams.QUERY),
+                page = request.int(RuntimeParams.PAGE, 1),
+            ),
+        )
+
+        RuntimeMethods.MANGA_POPULAR -> json.encodeToJsonElement(
+            ListSerializer(Manga.serializer()),
+            manager.popularManga(
+                extensionId = request.requireString(RuntimeParams.EXTENSION_ID),
+                sourceId = request.string(RuntimeParams.SOURCE_ID),
+                page = request.int(RuntimeParams.PAGE, 1),
+            ),
+        )
+
+        RuntimeMethods.MANGA_LATEST -> json.encodeToJsonElement(
+            ListSerializer(Manga.serializer()),
+            manager.latestManga(
+                extensionId = request.requireString(RuntimeParams.EXTENSION_ID),
+                sourceId = request.string(RuntimeParams.SOURCE_ID),
+                page = request.int(RuntimeParams.PAGE, 1),
+            ),
+        )
+
+        RuntimeMethods.MANGA_DETAILS -> json.encodeToJsonElement(
+            MangaDetails.serializer(),
+            manager.mangaDetails(
+                extensionId = request.requireString(RuntimeParams.EXTENSION_ID),
+                sourceId = request.string(RuntimeParams.SOURCE_ID),
+                mangaUrl = request.requireString(RuntimeParams.MANGA_ID),
+            ),
+        )
+
+        RuntimeMethods.MANGA_CHAPTERS -> json.encodeToJsonElement(
+            ListSerializer(Chapter.serializer()),
+            manager.chapters(
+                extensionId = request.requireString(RuntimeParams.EXTENSION_ID),
+                sourceId = request.string(RuntimeParams.SOURCE_ID),
+                mangaUrl = request.requireString(RuntimeParams.MANGA_ID),
+            ),
+        )
+
+        RuntimeMethods.MANGA_PAGES -> json.encodeToJsonElement(
+            ListSerializer(MangaPage.serializer()),
+            manager.pages(
+                extensionId = request.requireString(RuntimeParams.EXTENSION_ID),
+                sourceId = request.string(RuntimeParams.SOURCE_ID),
+                chapterUrl = request.requireString(RuntimeParams.CHAPTER_ID),
             ),
         )
 

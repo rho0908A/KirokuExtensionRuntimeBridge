@@ -22,8 +22,8 @@ The bridge is independent of Kiroku (or any other player). Kiroku is simply the 
 | `bridge-ipc` | AAR | AIDL contract, protocol constants, unified models |
 | `bridge-sdk` | AAR | Public SDK: `connect`, `getExtensions`, `search`, `getDetails`, `getEpisodes`, `extractStreams`, events, reconnect |
 | `backend-api` | AAR | `ExtensionBackend` abstraction shared by ecosystems |
-| `aniyomi-api` | AAR | Host-side Aniyomi `extensions-lib` API surface (lib 12–17) |
-| `backend-aniyomi` | AAR | Loads Aniyomi APK extensions, executes anime sources |
+| `aniyomi-api` | AAR | Host-side API surface: Anikku `animesource` (lib 12–16) + Mihon `source` (lib 1.4–1.6) |
+| `backend-aniyomi` | AAR | Loads Aniyomi/Anikku anime and Mihon manga APK extensions, executes both |
 | `backend-cloudstream` | AAR | Loads `.cs3` plugins against the CloudStream 4.9.1 library |
 | `runtime-host` | APK | The runtime service + Extension Manager UI |
 | `sample-host` | APK | Reference integration using only the SDK |
@@ -45,8 +45,15 @@ Node, Python or web runtime anywhere in this project.
 * CloudStream's library AAR declares `minCompileSdk=37`. This project compiles against 34 and
   disables that metadata check (`android.experimental.disableCompileSdkChecks`); it binds only to
   stable JVM-level CloudStream classes.
-* Aniyomi **manga** extensions are not supported: the runtime ships an anime API only. Manga
-  extensions appear in a repository index but report `EXTENSION_UNSUPPORTED` when installed.
+* **Anime and manga extension APKs are both supported by the Aniyomi backend.** Anime packages run
+  against Anikku's `animesource` API (extensions-lib 12–16) and manga packages against Mihon's
+  `source` API (extensions-lib 1.4–1.6). The archived Aniyomi app is no longer the reference: the
+  anime layer follows Anikku, the manga layer follows Mihon, and the backend keeps the `aniyomi`
+  name so host integrations do not have to change.
+* **Repository indexes:** Keiyoushi's `index.min.json` is now only a two-entry "update your app"
+  placeholder. The runtime follows `repo.json` → `index_v2` and decodes the gzipped `index.pb`
+  protobuf index, so real manga extensions are listed; legacy Aniyomi `index.min.json` anime
+  repositories still work the same way.
 
 ## Quick start (build from source)
 
@@ -68,7 +75,8 @@ any setup. If you have no local Android SDK, push to `main` and use the download
 
 The Runtime Host ships with two real repositories enabled:
 
-* `yuzono/anime-repo` — Aniyomi anime extensions (API 12–17)
+* `yuzono/anime-repo` — Aniyomi/Anikku anime extensions (API 12–16)
+* `keiyoushi/extensions` — Mihon manga extensions (`repo.json` → `index_v2`, lib 1.6)
 * `phisher98/cloudstream-extensions-phisher` — prebuilt CloudStream `.cs3` plugins
 
 ## Use it in your app

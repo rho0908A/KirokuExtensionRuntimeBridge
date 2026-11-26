@@ -39,6 +39,8 @@ dependencies {
     api(libs.kotlinx.coroutines.core)
     api(libs.kotlinx.serialization.json)
     api("androidx.preference:preference-ktx:1.2.1")
+    // Anime (Anikku) and manga (Mihon 1.4) extension APIs expose RxJava 1 observables.
+    api("io.reactivex:rxjava:1.3.8")
 
     testImplementation(libs.junit)
 }

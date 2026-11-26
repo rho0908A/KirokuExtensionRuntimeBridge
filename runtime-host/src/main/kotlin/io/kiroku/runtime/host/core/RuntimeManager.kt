@@ -4,16 +4,21 @@ import android.content.Context
 import android.os.Build
 import io.kiroku.runtime.backend.BackendException
 import io.kiroku.runtime.backend.ExtensionBackend
+import io.kiroku.runtime.backend.MangaBackend
 import io.kiroku.runtime.backend.aniyomi.AniyomiBackend
 import io.kiroku.runtime.backend.cloudstream.CloudStreamBackend
 import io.kiroku.runtime.ipc.Anime
 import io.kiroku.runtime.ipc.AnimeDetails
 import io.kiroku.runtime.ipc.BackendType
+import io.kiroku.runtime.ipc.Chapter
 import io.kiroku.runtime.ipc.Episode
 import io.kiroku.runtime.ipc.ErrorCode
 import io.kiroku.runtime.ipc.Extension
 import io.kiroku.runtime.ipc.ExtensionRepository
 import io.kiroku.runtime.ipc.InstallationProgress
+import io.kiroku.runtime.ipc.Manga
+import io.kiroku.runtime.ipc.MangaDetails
+import io.kiroku.runtime.ipc.MangaPage
 import io.kiroku.runtime.ipc.RepositoryExtension
 import io.kiroku.runtime.ipc.RuntimeCapabilities
 import io.kiroku.runtime.ipc.RuntimeEvent
@@ -121,6 +126,7 @@ class RuntimeManager private constructor(private val context: Context) {
                 subtitleExtraction = true,
                 audioTrackExtraction = true,
                 runtimeLogs = true,
+                mangaExtraction = backends.any { it is MangaBackend },
             ),
             installedExtensions = _installed.value.size,
             backends = backends.map { it.info },
@@ -230,27 +236,32 @@ class RuntimeManager private constructor(private val context: Context) {
         return removed
     }
 
-    /** Imports every Aniyomi APK found in the user-selected custom APK path. */
+    /** Imports every extension APK found in the configured anime and manga APK paths. */
     suspend fun importFromCustomPath(): Int {
         initialize()
-        val path = settings.value.aniyomiAnimeApkPath
-            ?: throw BackendException("No custom anime APK path is configured", ErrorCode.INVALID_REQUEST)
-        val directory = File(path)
-        if (!directory.isDirectory) {
-            throw BackendException("$path is not a readable directory", ErrorCode.STORAGE)
-        }
-        val packages = directory.listFiles { file -> file.isFile && file.name.endsWith(".apk", true) }.orEmpty()
-        if (packages.isEmpty()) {
-            throw BackendException("No .apk files in $path", ErrorCode.EXTENSION_INVALID_PACKAGE)
+        val paths = listOfNotNull(
+            settings.value.aniyomiAnimeApkPath,
+            settings.value.aniyomiMangaApkPath,
+        ).distinct()
+        if (paths.isEmpty()) {
+            throw BackendException("No custom APK path is configured", ErrorCode.INVALID_REQUEST)
         }
         var imported = 0
-        packages.forEach { file ->
-            try {
-                aniyomi.installPackage(file, null) { publishProgress(it) }
-                imported++
-                logs.info(TAG, "Imported ${file.name}")
-            } catch (e: Throwable) {
-                logs.error(TAG, "Import of ${file.name} failed: ${e.message}")
+        paths.forEach { path ->
+            val directory = File(path)
+            if (!directory.isDirectory) {
+                logs.warn(TAG, "$path is not a readable directory")
+                return@forEach
+            }
+            val packages = directory.listFiles { file -> file.isFile && file.name.endsWith(".apk", true) }.orEmpty()
+            packages.forEach { file ->
+                try {
+                    aniyomi.installPackage(file, null) { publishProgress(it) }
+                    imported++
+                    logs.info(TAG, "Imported ${file.name}")
+                } catch (e: Throwable) {
+                    logs.error(TAG, "Import of ${file.name} failed: ${e.message}")
+                }
             }
         }
         return imported
@@ -292,6 +303,35 @@ class RuntimeManager private constructor(private val context: Context) {
 
     suspend fun streams(extensionId: String, sourceId: String?, episodeUrl: String): List<StreamSource> =
         backendForExtension(extensionId).streams(extensionId, sourceId, episodeUrl)
+
+    // ---------------------------------------------------------------------------------------------
+    // Manga operations
+    // ---------------------------------------------------------------------------------------------
+
+    suspend fun searchManga(extensionId: String, sourceId: String?, query: String, page: Int): List<Manga> =
+        mangaBackend(extensionId).searchManga(extensionId, sourceId, query, page)
+
+    suspend fun popularManga(extensionId: String, sourceId: String?, page: Int): List<Manga> =
+        mangaBackend(extensionId).popularManga(extensionId, sourceId, page)
+
+    suspend fun latestManga(extensionId: String, sourceId: String?, page: Int): List<Manga> =
+        mangaBackend(extensionId).latestManga(extensionId, sourceId, page)
+
+    suspend fun mangaDetails(extensionId: String, sourceId: String?, mangaUrl: String): MangaDetails =
+        mangaBackend(extensionId).mangaDetails(extensionId, sourceId, mangaUrl)
+
+    suspend fun chapters(extensionId: String, sourceId: String?, mangaUrl: String): List<Chapter> =
+        mangaBackend(extensionId).chapters(extensionId, sourceId, mangaUrl)
+
+    suspend fun pages(extensionId: String, sourceId: String?, chapterUrl: String): List<MangaPage> =
+        mangaBackend(extensionId).pages(extensionId, sourceId, chapterUrl)
+
+    private fun mangaBackend(extensionId: String): MangaBackend =
+        backendForExtension(extensionId) as? MangaBackend
+            ?: throw BackendException(
+                "The ${backendForExtension(extensionId).type} backend does not execute manga sources",
+                ErrorCode.EXTENSION_UNSUPPORTED,
+            )
 
     // ---------------------------------------------------------------------------------------------
     // Repositories
@@ -373,9 +413,12 @@ class RuntimeManager private constructor(private val context: Context) {
      * package there so it can be shared or re-imported without the runtime store.
      */
     private suspend fun mirrorToCustomPath(extension: Extension) = withContext(Dispatchers.IO) {
-        if (settings.value.aniyomiInternalAnimeInstalls) return@withContext
         if (extension.backend != BackendType.ANIYOMI) return@withContext
-        val path = settings.value.aniyomiAnimeApkPath ?: return@withContext
+        val manga = extension.capabilities.manga
+        val internal = if (manga) settings.value.aniyomiInternalMangaInstalls else settings.value.aniyomiInternalAnimeInstalls
+        if (internal) return@withContext
+        val path = if (manga) settings.value.aniyomiMangaApkPath else settings.value.aniyomiAnimeApkPath
+        if (path == null) return@withContext
         val backend = backendFor(extension.backend)
         val current = packageFile(backend, extension.id) ?: return@withContext
         runCatching {

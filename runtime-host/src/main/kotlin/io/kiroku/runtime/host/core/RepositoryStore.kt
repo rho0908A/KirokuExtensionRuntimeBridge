@@ -102,6 +102,13 @@ class RepositoryStore(context: Context, private val logs: LogStore) {
             isBuiltIn = true,
         ),
         ExtensionRepository(
+            id = BUILTIN_MANGA,
+            name = "Keiyoushi Manga Extensions",
+            url = "https://raw.githubusercontent.com/keiyoushi/extensions/repo/repo.json",
+            backend = BackendType.ANIYOMI,
+            isBuiltIn = true,
+        ),
+        ExtensionRepository(
             id = BUILTIN_CLOUDSTREAM,
             name = "Phisher CloudStream Extensions",
             url = "https://raw.githubusercontent.com/phisher98/cloudstream-extensions-phisher/builds/repo.json",
@@ -114,6 +121,7 @@ class RepositoryStore(context: Context, private val logs: LogStore) {
         const val TAG = "Repositories"
         const val KEY_REPOSITORIES = "repositories_json"
         const val BUILTIN_ANIYOMI = "builtin-aniyomi-yuzono"
+        const val BUILTIN_MANGA = "builtin-aniyomi-keiyoushi"
         const val BUILTIN_CLOUDSTREAM = "builtin-cloudstream-phisher"
     }
 }

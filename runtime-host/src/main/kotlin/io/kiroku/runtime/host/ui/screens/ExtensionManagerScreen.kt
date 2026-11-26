@@ -57,7 +57,7 @@ import io.kiroku.runtime.host.ui.theme.TextSecondary
 
 /**
  * The Extension Manager screen: runtime status, Aniyomi settings and plugin installation/sync
- * actions. Every row maps to a real runtime operation; the two manga rows are shown disabled
+ * actions. Every row maps to a real runtime operation, for anime (Anikku) and manga (Mihon) alike
  * because this runtime build executes Aniyomi anime sources only.
  */
 @Composable
@@ -76,6 +76,8 @@ fun ExtensionManagerScreen(
     var rollbackDialog by remember { mutableStateOf(false) }
     var clientDialog by remember { mutableStateOf(false) }
     var pathDraft by remember { mutableStateOf(settings.aniyomiAnimeApkPath.orEmpty()) }
+    var mangaPathDialog by remember { mutableStateOf(false) }
+    var mangaPathDraft by remember { mutableStateOf(settings.aniyomiMangaApkPath.orEmpty()) }
     var clientDraft by remember { mutableStateOf("") }
 
     val ready = info != null
@@ -134,10 +136,9 @@ fun ExtensionManagerScreen(
             ToggleRow(
                 icon = Icons.Rounded.Storage,
                 title = "Aniyomi Internal Manga Extensions",
-                description = "Unavailable: this runtime executes anime sources only",
-                checked = false,
-                enabled = false,
-                onCheckedChange = {},
+                description = "Install manga extensions only into the runtime (no Package Manager)",
+                checked = settings.aniyomiInternalMangaInstalls,
+                onCheckedChange = vm::setInternalMangaInstalls,
             )
             HorizontalDivider(color = CardDarkHigh)
             ActionRow(
@@ -153,9 +154,11 @@ fun ExtensionManagerScreen(
             ActionRow(
                 icon = Icons.Rounded.Folder,
                 title = "Custom Manga APK Path",
-                description = "Unavailable: no manga backend in this build",
-                enabled = false,
-                onClick = {},
+                description = settings.aniyomiMangaApkPath ?: "Custom folder to import manga extension APKs from",
+                onClick = {
+                    mangaPathDraft = settings.aniyomiMangaApkPath.orEmpty()
+                    mangaPathDialog = true
+                },
             )
         }
 
@@ -281,6 +284,37 @@ fun ExtensionManagerScreen(
                 }) { Text("Save") }
             },
             dismissButton = { TextButton(onClick = { pathDialog = false }) { Text("Cancel") } },
+            shape = RoundedCornerShape(24.dp),
+        )
+    }
+
+    if (mangaPathDialog) {
+        AlertDialog(
+            onDismissRequest = { mangaPathDialog = false },
+            title = { Text("Custom Manga APK Path") },
+            text = {
+                Column {
+                    Text(
+                        "Folder the runtime imports Mihon manga .apk files from.",
+                        fontSize = 13.sp,
+                        color = TextSecondary,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = mangaPathDraft,
+                        onValueChange = { mangaPathDraft = it },
+                        singleLine = true,
+                        label = { Text("Absolute path") },
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.setMangaPath(mangaPathDraft)
+                    mangaPathDialog = false
+                }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { mangaPathDialog = false }) { Text("Cancel") } },
             shape = RoundedCornerShape(24.dp),
         )
     }

@@ -73,6 +73,13 @@ object RuntimeMethods {
     const val DETAILS = "sources.details"
     const val EPISODES = "sources.episodes"
     const val STREAMS = "sources.streams"
+
+    const val MANGA_SEARCH = "sources.searchManga"
+    const val MANGA_POPULAR = "sources.popularManga"
+    const val MANGA_LATEST = "sources.latestManga"
+    const val MANGA_DETAILS = "sources.mangaDetails"
+    const val MANGA_CHAPTERS = "sources.chapters"
+    const val MANGA_PAGES = "sources.pages"
 }
 
 /** Parameter keys used in [RpcRequest.params]. */
@@ -83,6 +90,8 @@ object RuntimeParams {
     const val PAGE = "page"
     const val ANIME_ID = "animeId"
     const val EPISODE_ID = "episodeId"
+    const val MANGA_ID = "mangaId"
+    const val CHAPTER_ID = "chapterId"
     const val URL = "url"
     const val REPOSITORY_ID = "repositoryId"
     const val NAME = "name"

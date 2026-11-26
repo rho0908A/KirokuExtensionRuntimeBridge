@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.animesource.online
 import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
@@ -12,50 +13,59 @@ import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
+import rx.schedulers.Schedulers
 
 /**
- * Base class for HTTP backed Aniyomi anime sources.
+ * Base class for HTTP backed anime sources, matching Anikku's `AnimeHttpSource`.
  *
- * The request/parse split matches Aniyomi's `AnimeHttpSource`: extensions override the `*Request`
- * and `*Parse` members, while the runtime drives the calls and owns the HTTP client.
+ * Extensions override the `*Request` / `*Parse` members and the runtime drives them. Every hook is
+ * `open` rather than `abstract` where Anikku marks it abstract, so packages built against older
+ * Aniyomi libraries (lib 12-15) still instantiate: calling a hook they never implemented returns
+ * the safe default instead of `AbstractMethodError`.
  */
 abstract class AnimeHttpSource : AnimeCatalogueSource {
 
     abstract val baseUrl: String
 
+    /** Extensions bump this to force a new source id after changing their URL scheme. */
+    open val versionId: Int = 1
+
+    override val id: Long by lazy { generateId(name, lang, versionId) }
+
     open val client: OkHttpClient
         get() = NETWORK_CLIENT
 
     open val headers: Headers
-        get() = Headers.Builder().add("User-Agent", USER_AGENT).build()
+        get() = headersBuilder().build()
+
+    protected open fun headersBuilder(): Headers.Builder = Headers.Builder()
+        .add("User-Agent", USER_AGENT)
 
     override val supportsLatest: Boolean
         get() = true
 
-    override suspend fun getPopularAnime(page: Int): AnimesPage {
-        val request = popularAnimeRequest(page)
-        val response = client.newCall(request).awaitSuccess()
-        return response.use { popularAnimeParse(it) }
+    override fun toString(): String = "$name (${lang.uppercase()})"
+
+    // ---------------------------------------------------------------------------------------------
+    // Browsing
+    // ---------------------------------------------------------------------------------------------
+
+    override fun fetchPopularAnime(page: Int): Observable<AnimesPage> = rx {
+        val response = client.newCall(popularAnimeRequest(page)).awaitSuccess()
+        response.use { popularAnimeParse(it) }
     }
 
-    protected abstract fun popularAnimeRequest(page: Int): Request
+    protected open fun popularAnimeRequest(page: Int): Request = Request.Builder()
+        .url("$baseUrl/$page")
+        .headers(headers)
+        .build()
 
-    protected abstract fun popularAnimeParse(response: Response): AnimesPage
+    protected open fun popularAnimeParse(response: Response): AnimesPage = AnimesPage(emptyList(), false)
 
-    override suspend fun getLatestUpdates(page: Int): AnimesPage {
-        val request = latestUpdatesRequest(page)
-        val response = client.newCall(request).awaitSuccess()
-        return response.use { latestUpdatesParse(it) }
-    }
-
-    protected open fun latestUpdatesRequest(page: Int): Request = popularAnimeRequest(page)
-
-    protected open fun latestUpdatesParse(response: Response): AnimesPage = popularAnimeParse(response)
-
-    override suspend fun getSearchAnime(page: Int, query: String, filters: AnimeFilterList): AnimesPage {
-        val request = searchAnimeRequest(page, query, filters)
-        val response = client.newCall(request).awaitSuccess()
-        return response.use { searchAnimeParse(it) }
+    override fun fetchSearchAnime(page: Int, query: String, filters: AnimeFilterList): Observable<AnimesPage> = rx {
+        val response = client.newCall(searchAnimeRequest(page, query, filters)).awaitSuccess()
+        response.use { searchAnimeParse(it) }
     }
 
     protected open fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request =
@@ -64,41 +74,126 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
             .headers(headers)
             .build()
 
-    protected abstract fun searchAnimeParse(response: Response): AnimesPage
+    protected open fun searchAnimeParse(response: Response): AnimesPage = AnimesPage(emptyList(), false)
 
-    override suspend fun getAnimeDetails(anime: SAnime): SAnime {
-        val request = animeDetailsRequest(anime)
-        val response = client.newCall(request).awaitSuccess()
-        return response.use { animeDetailsParse(it).apply { url = anime.url } }
+    override fun fetchLatestUpdates(page: Int): Observable<AnimesPage> = rx {
+        val response = client.newCall(latestUpdatesRequest(page)).awaitSuccess()
+        response.use { latestUpdatesParse(it) }
     }
 
-    protected abstract fun animeDetailsRequest(anime: SAnime): Request
+    protected open fun latestUpdatesRequest(page: Int): Request = popularAnimeRequest(page)
 
-    protected abstract fun animeDetailsParse(response: Response): SAnime
+    protected open fun latestUpdatesParse(response: Response): AnimesPage = popularAnimeParse(response)
 
-    override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
-        val request = episodeListRequest(anime)
-        val response = client.newCall(request).awaitSuccess()
-        return response.use { episodeListParse(it) }
+    // ---------------------------------------------------------------------------------------------
+    // Details
+    // ---------------------------------------------------------------------------------------------
+
+    override fun fetchAnimeDetails(anime: SAnime): Observable<SAnime> = rx {
+        val response = client.newCall(animeDetailsRequest(anime)).awaitSuccess()
+        response.use { animeDetailsParse(it).apply { url = anime.url } }
     }
 
-    protected abstract fun episodeListRequest(anime: SAnime): Request
+    protected open fun animeDetailsRequest(anime: SAnime): Request = Request.Builder()
+        .url(anime.url)
+        .headers(headers)
+        .build()
 
-    protected abstract fun episodeListParse(response: Response): List<SEpisode>
+    protected open fun animeDetailsParse(response: Response): SAnime = SAnime.create().apply { url = response.request.url.toString() }
+
+    // ---------------------------------------------------------------------------------------------
+    // Episodes / seasons
+    // ---------------------------------------------------------------------------------------------
+
+    override fun fetchEpisodeList(anime: SAnime): Observable<List<SEpisode>> = rx {
+        val response = client.newCall(episodeListRequest(anime)).awaitSuccess()
+        response.use { episodeListParse(it) }
+    }
+
+    protected open fun episodeListRequest(anime: SAnime): Request = Request.Builder()
+        .url(anime.url)
+        .headers(headers)
+        .build()
+
+    protected open fun episodeListParse(response: Response): List<SEpisode> = emptyList()
+
+    override suspend fun getSeasonList(anime: SAnime): List<SAnime> {
+        val response = client.newCall(seasonListRequest(anime)).awaitSuccess()
+        return response.use { seasonListParse(it) }
+    }
+
+    protected open fun seasonListRequest(anime: SAnime): Request = animeDetailsRequest(anime)
+
+    protected open fun seasonListParse(response: Response): List<SAnime> = emptyList()
+
+    // ---------------------------------------------------------------------------------------------
+    // Hosters and videos
+    // ---------------------------------------------------------------------------------------------
+
+    override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
+        val response = client.newCall(hosterListRequest(episode)).awaitSuccess()
+        return response.use { hosterListParse(it) }.sortHosters()
+    }
+
+    protected open fun hosterListRequest(episode: SEpisode): Request = Request.Builder()
+        .url(episode.url)
+        .headers(headers)
+        .build()
+
+    protected open fun hosterListParse(response: Response): List<Hoster> = emptyList()
+
+    override suspend fun getVideoList(hoster: Hoster): List<Video> {
+        if (!hoster.lazy && !hoster.videoList.isNullOrEmpty()) return hoster.videoList.orEmpty()
+        val response = client.newCall(videoListRequest(hoster)).awaitSuccess()
+        return response.use { videoListParse(it, hoster) }.sortVideos()
+    }
+
+    protected open fun videoListRequest(hoster: Hoster): Request = Request.Builder()
+        .url(hoster.hosterUrl)
+        .headers(headers)
+        .build()
+
+    protected open fun videoListParse(response: Response, hoster: Hoster): List<Video> = hoster.videoList.orEmpty()
+
+    open suspend fun resolveVideo(video: Video): Video? = video
+
+    override fun fetchVideoList(episode: SEpisode): Observable<List<Video>> = rx { getVideoList(episode) }
 
     override suspend fun getVideoList(episode: SEpisode): List<Video> {
-        val request = videoListRequest(episode)
-        val response = client.newCall(request).awaitSuccess()
-        return response.use { videoListParse(it) }
+        val response = client.newCall(videoListRequest(episode)).awaitSuccess()
+        return response.use { videoListParse(it) }.sortVideos()
     }
 
-    protected abstract fun videoListRequest(episode: SEpisode): Request
+    protected open fun videoListRequest(episode: SEpisode): Request = Request.Builder()
+        .url(episode.url)
+        .headers(headers)
+        .build()
 
-    protected abstract fun videoListParse(response: Response): List<Video>
+    protected open fun videoListParse(response: Response): List<Video> = emptyList()
+
+    open fun List<Hoster>.sortHosters(): List<Hoster> = sortedBy { it.hosterName.lowercase() }
+
+    open fun List<Video>.sortVideos(): List<Video> =
+        sortedWith(compareByDescending<Video> { it.resolution ?: 0 }.thenByDescending { it.videoTitle })
+
+    protected open fun List<Video>.sort(): List<Video> = sortVideos()
+
+    // ---------------------------------------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------------------------------------
+
+    protected fun generateId(name: String, lang: String, versionId: Int): Long =
+        "$name/$lang/$versionId".hashCode().toLong() and 0xFFFFFFFFL
 
     override fun getFilterList(): AnimeFilterList = AnimeFilterList()
 
-    override fun toString(): String = "$name (${javaClass.simpleName})"
+    /**
+     * Bridges an RxJava observable to a coroutine. Extensions call the `fetch*` methods from their
+     * own code, so they must return a working observable rather than throw.
+     */
+    protected fun <T> rx(block: suspend () -> T): Observable<T> =
+        Observable.defer { Observable.just(kotlinx.coroutines.runBlocking { block() }) }
+            .subscribeOn(Schedulers.io())
 
     companion object {
         const val USER_AGENT: String =

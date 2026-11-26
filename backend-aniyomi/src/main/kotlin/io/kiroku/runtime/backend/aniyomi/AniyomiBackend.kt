@@ -10,22 +10,34 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
+import eu.kanade.tachiyomi.source.CatalogueSource
+import eu.kanade.tachiyomi.source.Source
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import io.kiroku.runtime.backend.BackendException
+import io.kiroku.runtime.backend.ExtensionBackend
+import io.kiroku.runtime.backend.MangaBackend
+import io.kiroku.runtime.backend.PackageInspection
+import io.kiroku.runtime.backend.aniyomi.AniyomiMangaMapper.toBridgeChapter
+import io.kiroku.runtime.backend.aniyomi.AniyomiMangaMapper.toBridgeManga
+import io.kiroku.runtime.backend.aniyomi.AniyomiMangaMapper.toBridgePage
 import io.kiroku.runtime.backend.aniyomi.AniyomiMapper.toBridgeAnime
 import io.kiroku.runtime.backend.aniyomi.AniyomiMapper.toBridgeEpisode
 import io.kiroku.runtime.backend.aniyomi.AniyomiMapper.toStreamSource
-import io.kiroku.runtime.backend.ExtensionBackend
-import io.kiroku.runtime.backend.PackageInspection
 import io.kiroku.runtime.ipc.Anime
 import io.kiroku.runtime.ipc.AnimeDetails
 import io.kiroku.runtime.ipc.BackendInfo
 import io.kiroku.runtime.ipc.BackendType
+import io.kiroku.runtime.ipc.Chapter
 import io.kiroku.runtime.ipc.Episode
 import io.kiroku.runtime.ipc.ErrorCode
 import io.kiroku.runtime.ipc.Extension
 import io.kiroku.runtime.ipc.ExtensionError
 import io.kiroku.runtime.ipc.ExtensionRepository
 import io.kiroku.runtime.ipc.InstallationProgress
+import io.kiroku.runtime.ipc.Manga
+import io.kiroku.runtime.ipc.MangaDetails
+import io.kiroku.runtime.ipc.MangaPage
 import io.kiroku.runtime.ipc.RepositoryExtension
 import io.kiroku.runtime.ipc.StreamSource
 import java.io.File
@@ -41,15 +53,19 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 
 /**
- * Aniyomi backend: installs Aniyomi APK extensions and executes their anime sources.
+ * The Aniyomi backend: installs extension APKs and executes their sources.
  *
- * Execution is isolated from CloudStream: nothing here is shared with the other backend except the
- * bridge models, and every failure is converted to [BackendException] with an explicit error code.
+ * The backend is named after Aniyomi because that is the ecosystem its packages come from, but the
+ * API surface it provides is taken from the maintained hosts:
+ *  - anime packages run against **Anikku**'s `animesource` API (extensions-lib 12-16),
+ *  - manga packages run against **Mihon**'s `source` API (extensions-lib 1.4-1.6).
+ *
+ * CloudStream is a separate backend; nothing here is shared with it except the bridge models.
  */
 class AniyomiBackend(
     context: Context,
     private val http: OkHttpClient = defaultHttpClient(),
-) : ExtensionBackend {
+) : ExtensionBackend, MangaBackend {
 
     private val appContext = context.applicationContext
     private val extensionDir = File(appContext.filesDir, "extensions/aniyomi")
@@ -68,10 +84,14 @@ class AniyomiBackend(
 
     override val info: BackendInfo = BackendInfo(
         type = BackendType.ANIYOMI,
-        implementationVersion = "1.0.0",
-        apiVersion = "aniyomi extensions-lib ${AniyomiPackage.SUPPORTED_LIB_VERSIONS.first}..${AniyomiPackage.SUPPORTED_LIB_VERSIONS.last}",
-        supportedExtensionKinds = listOf("Aniyomi anime extension APK"),
-        notes = "Sources are loaded child-first with PathClassLoader against the runtime-provided Aniyomi API.",
+        implementationVersion = "1.1.0",
+        apiVersion = "anikku animesource 12..16, mihon source 1.4..1.6",
+        supportedExtensionKinds = listOf(
+            "Anikku anime extension APK (tachiyomi.animeextension)",
+            "Mihon manga extension APK (tachiyomi.extension)",
+        ),
+        notes = "Anime sources run against the Anikku API, manga sources against the Mihon API. " +
+            "Both are loaded child-first with PathClassLoader.",
     )
 
     override suspend fun initialize() {
@@ -96,7 +116,8 @@ class AniyomiBackend(
                 Log.w(TAG, "Skipping unreadable extension package ${file.name}")
                 return@map null
             }
-            val validation = AniyomiPackage.validate(appContext, file)
+            val kind = AniyomiPackage.kind(info)
+            val validation = AniyomiPackage.validate(appContext, file, kind)
             if (validation != null) {
                 return@map loader.failedExtension(info, file, validation)
             }
@@ -125,23 +146,15 @@ class AniyomiBackend(
     }
 
     override suspend fun inspectPackage(file: File): PackageInspection {
-        val error = AniyomiPackage.validate(appContext, file)
+        val info = AniyomiPackage.packageInfo(appContext, file)
+        val kind = info?.let(AniyomiPackage::kind)
+        val error = AniyomiPackage.validate(appContext, file, kind)
         if (error != null) {
             return PackageInspection(valid = false, metadata = null, error = error)
         }
-        val info = AniyomiPackage.packageInfo(appContext, file)
-            ?: return PackageInspection(
-                valid = false,
-                metadata = null,
-                error = ExtensionError(
-                    code = ErrorCode.EXTENSION_INVALID_PACKAGE,
-                    message = "APK could not be parsed",
-                    backend = BackendType.ANIYOMI,
-                ),
-            )
         return PackageInspection(
             valid = true,
-            metadata = AniyomiPackage.metadata(appContext, info),
+            metadata = info?.let { AniyomiPackage.metadata(appContext, it) },
             sourceIds = emptyList(),
         )
     }
@@ -151,12 +164,12 @@ class AniyomiBackend(
         repositoryId: String?,
         onProgress: (suspend (InstallationProgress) -> Unit)?,
     ): Extension = withContext(Dispatchers.IO) {
-        val validation = AniyomiPackage.validate(appContext, file)
+        val info = AniyomiPackage.packageInfo(appContext, file)
+        val kind = info?.let(AniyomiPackage::kind)
+        val validation = AniyomiPackage.validate(appContext, file, kind)
         if (validation != null) throw BackendException(validation.message, validation.code)
 
-        val info = AniyomiPackage.packageInfo(appContext, file)
-            ?: throw BackendException("APK could not be parsed", ErrorCode.EXTENSION_INVALID_PACKAGE)
-
+        checkNotNull(info) { "APK could not be parsed" }
         val extensionId = info.packageName
         extensionDir.mkdirs()
         val target = File(extensionDir, "$extensionId.apk")
@@ -249,13 +262,16 @@ class AniyomiBackend(
         }
     }
 
-    override fun isLibraryVersionSupported(libVersion: String?): Boolean {
-        val major = libVersion?.substringBefore('.')?.toIntOrNull() ?: return false
-        return major in AniyomiPackage.SUPPORTED_LIB_VERSIONS
-    }
+    override fun isLibraryVersionSupported(libVersion: String?): Boolean =
+        AniyomiPackage.isSupportedLibVersion(libVersion) ||
+            AniyomiPackage.isMangaLibVersionSupported(libVersion)
+
+    // ---------------------------------------------------------------------------------------------
+    // Anime execution (Anikku API)
+    // ---------------------------------------------------------------------------------------------
 
     override suspend fun search(extensionId: String, sourceId: String?, query: String, page: Int): List<Anime> {
-        val source = catalogue(extensionId, sourceId)
+        val source = animeCatalogue(extensionId, sourceId)
         return guard(extensionId) {
             val filters = runCatching { source.getFilterList() }.getOrDefault(AnimeFilterList())
             source.getSearchAnime(page.coerceAtLeast(1), query, filters).animes
@@ -264,14 +280,14 @@ class AniyomiBackend(
     }
 
     override suspend fun popular(extensionId: String, sourceId: String?, page: Int): List<Anime> {
-        val source = catalogue(extensionId, sourceId)
+        val source = animeCatalogue(extensionId, sourceId)
         return guard(extensionId) {
             source.getPopularAnime(page.coerceAtLeast(1)).animes.map { it.toBridgeAnime(extensionId) }
         }
     }
 
     override suspend fun latest(extensionId: String, sourceId: String?, page: Int): List<Anime> {
-        val source = catalogue(extensionId, sourceId)
+        val source = animeCatalogue(extensionId, sourceId)
         if (!source.supportsLatest) {
             throw BackendException("Source ${source.name} does not support latest updates", ErrorCode.EXTENSION_UNSUPPORTED)
         }
@@ -281,9 +297,9 @@ class AniyomiBackend(
     }
 
     override suspend fun details(extensionId: String, sourceId: String?, animeUrl: String): AnimeDetails {
-        val source = source(extensionId, sourceId)
+        val source = animeSource(extensionId, sourceId)
         return guard(extensionId) {
-            val stub = SAnime().apply { url = animeUrl }
+            val stub = SAnime.create().apply { url = animeUrl }
             val details = runCatching { source.getAnimeDetails(stub) }.getOrElse { stub }
             val episodes = runCatching { source.getEpisodeList(details) }.getOrDefault(emptyList())
             AnimeDetails(
@@ -295,39 +311,99 @@ class AniyomiBackend(
     }
 
     override suspend fun episodes(extensionId: String, sourceId: String?, animeUrl: String): List<Episode> {
-        val source = source(extensionId, sourceId)
+        val source = animeSource(extensionId, sourceId)
         return guard(extensionId) {
-            val stub = SAnime().apply { url = animeUrl }
+            val stub = SAnime.create().apply { url = animeUrl }
             source.getEpisodeList(stub).map { it.toBridgeEpisode(animeUrl) }
         }
     }
 
     override suspend fun streams(extensionId: String, sourceId: String?, episodeUrl: String): List<StreamSource> {
-        val source = source(extensionId, sourceId)
+        val source = animeSource(extensionId, sourceId)
         return guard(extensionId) {
-            val stub = SEpisode().apply { url = episodeUrl }
+            val stub = SEpisode.create().apply { url = episodeUrl }
             val direct = runCatching { source.getVideoList(stub) }.getOrDefault(emptyList())
             val videos: List<Video> = if (direct.isNotEmpty()) {
                 direct
             } else {
                 // Newer sources resolve through hosters; an empty direct list is not an error.
-                val catalogue = source as? AnimeCatalogueSource
-                val hosters = runCatching { catalogue?.getHosterList(stub) }.getOrNull().orEmpty()
+                val hosters = runCatching { source.getHosterList(stub) }.getOrNull().orEmpty()
                 hosters.flatMap { hoster ->
-                    val hosterVideos = runCatching { catalogue?.getVideoList(hoster) }
-                        .getOrNull()
-                        .orEmpty()
-                    hosterVideos.map { video ->
-                        if (video.videoTitle.isNullOrBlank() && hoster.hosterName.isNotBlank()) {
-                            video.videoTitle = hoster.hosterName
-                        }
-                        video
-                    }
-                }
+                    hoster.videoList.orEmpty() + runCatching { source.getVideoList(hoster) }
+                        .getOrDefault(emptyList())
+                }.distinctBy { it.videoUrl }
             }
             videos.map { it.toStreamSource(episodeUrl) }
         }
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // Manga execution (Mihon API)
+    // ---------------------------------------------------------------------------------------------
+
+    override suspend fun searchManga(extensionId: String, sourceId: String?, query: String, page: Int): List<Manga> {
+        val source = mangaCatalogue(extensionId, sourceId)
+        return guard(extensionId) {
+            val filters = runCatching { source.getFilterList() }.getOrDefault(eu.kanade.tachiyomi.source.model.FilterList())
+            source.getSearchManga(page.coerceAtLeast(1), query, filters).mangas
+                .map { it.toBridgeManga(extensionId) }
+        }
+    }
+
+    override suspend fun popularManga(extensionId: String, sourceId: String?, page: Int): List<Manga> {
+        val source = mangaCatalogue(extensionId, sourceId)
+        return guard(extensionId) {
+            source.getPopularManga(page.coerceAtLeast(1)).mangas.map { it.toBridgeManga(extensionId) }
+        }
+    }
+
+    override suspend fun latestManga(extensionId: String, sourceId: String?, page: Int): List<Manga> {
+        val source = mangaCatalogue(extensionId, sourceId)
+        if (!source.supportsLatest) {
+            throw BackendException("Source ${source.name} does not support latest updates", ErrorCode.EXTENSION_UNSUPPORTED)
+        }
+        return guard(extensionId) {
+            source.getLatestUpdates(page.coerceAtLeast(1)).mangas.map { it.toBridgeManga(extensionId) }
+        }
+    }
+
+    override suspend fun mangaDetails(extensionId: String, sourceId: String?, mangaUrl: String): MangaDetails {
+        val source = mangaSource(extensionId, sourceId)
+        return guard(extensionId) {
+            val stub = SManga.create().apply { url = mangaUrl }
+            val update = runCatching { source.getMangaUpdate(stub, emptyList(), true, true) }.getOrNull()
+            val manga = update?.manga ?: stub
+            val chapters = update?.chapters
+                ?: runCatching { source.getMangaUpdate(stub, emptyList(), false, true).chapters }
+                    .getOrDefault(emptyList())
+            MangaDetails(
+                manga = manga.toBridgeManga(extensionId),
+                chapters = chapters.map { it.toBridgeChapter(manga.url) },
+                extensionId = extensionId,
+            )
+        }
+    }
+
+    override suspend fun chapters(extensionId: String, sourceId: String?, mangaUrl: String): List<Chapter> {
+        val source = mangaSource(extensionId, sourceId)
+        return guard(extensionId) {
+            val stub = SManga.create().apply { url = mangaUrl }
+            source.getMangaUpdate(stub, emptyList(), false, true).chapters
+                .map { it.toBridgeChapter(mangaUrl) }
+        }
+    }
+
+    override suspend fun pages(extensionId: String, sourceId: String?, chapterUrl: String): List<MangaPage> {
+        val source = mangaSource(extensionId, sourceId)
+        return guard(extensionId) {
+            val stub = SChapter.create().apply { url = chapterUrl }
+            source.getPageList(stub).map { it.toBridgePage() }
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Internals
+    // ---------------------------------------------------------------------------------------------
 
     private fun rebuildInstalledList(): List<Extension> {
         val onDisk = extensionDir.listFiles { file -> file.isFile && file.name.endsWith(".apk", true) }
@@ -336,25 +412,48 @@ class AniyomiBackend(
             .orEmpty()
         return _installed.value
             .filter { it.id in onDisk }
-            .map { extension ->
-                loaded[extension.id]?.extension ?: extension
-            }
+            .map { extension -> loaded[extension.id]?.extension ?: extension }
     }
 
-    private fun source(extensionId: String, sourceId: String?): AnimeSource {
-        val extension = loaded[extensionId] ?: throw BackendException(
+    private fun loadedExtension(extensionId: String): AniyomiLoadedExtension =
+        loaded[extensionId] ?: throw BackendException(
             "Extension $extensionId is not installed or failed to load",
             ErrorCode.EXTENSION_NOT_FOUND,
         )
-        if (sourceId == null) return extension.sources.firstOrNull()
+
+    private fun animeSource(extensionId: String, sourceId: String?): AnimeSource {
+        val extension = loadedExtension(extensionId)
+        if (extension.kind != AniyomiExtensionKind.ANIME) {
+            throw BackendException("$extensionId is a manga extension, not an anime extension", ErrorCode.EXTENSION_UNSUPPORTED)
+        }
+        if (sourceId == null) return extension.animeSources.firstOrNull()
             ?: throw BackendException("Extension $extensionId has no sources", ErrorCode.SOURCE_NOT_FOUND)
-        return extension.sources.firstOrNull { it.id.toString() == sourceId }
+        return extension.animeSources.firstOrNull { it.id.toString() == sourceId }
             ?: throw BackendException("Source $sourceId not found in $extensionId", ErrorCode.SOURCE_NOT_FOUND)
     }
 
-    private fun catalogue(extensionId: String, sourceId: String?): AnimeCatalogueSource {
-        val source = source(extensionId, sourceId)
+    private fun animeCatalogue(extensionId: String, sourceId: String?): AnimeCatalogueSource {
+        val source = animeSource(extensionId, sourceId)
         return source as? AnimeCatalogueSource ?: throw BackendException(
+            "Source ${source.name} does not support browsing or search",
+            ErrorCode.EXTENSION_UNSUPPORTED,
+        )
+    }
+
+    private fun mangaSource(extensionId: String, sourceId: String?): Source {
+        val extension = loadedExtension(extensionId)
+        if (extension.kind != AniyomiExtensionKind.MANGA) {
+            throw BackendException("$extensionId is an anime extension, not a manga extension", ErrorCode.EXTENSION_UNSUPPORTED)
+        }
+        if (sourceId == null) return extension.mangaSources.firstOrNull()
+            ?: throw BackendException("Extension $extensionId has no sources", ErrorCode.SOURCE_NOT_FOUND)
+        return extension.mangaSources.firstOrNull { it.id.toString() == sourceId }
+            ?: throw BackendException("Source $sourceId not found in $extensionId", ErrorCode.SOURCE_NOT_FOUND)
+    }
+
+    private fun mangaCatalogue(extensionId: String, sourceId: String?): CatalogueSource {
+        val source = mangaSource(extensionId, sourceId)
+        return source as? CatalogueSource ?: throw BackendException(
             "Source ${source.name} does not support browsing or search",
             ErrorCode.EXTENSION_UNSUPPORTED,
         )

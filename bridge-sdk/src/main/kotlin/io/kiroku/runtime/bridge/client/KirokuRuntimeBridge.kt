@@ -14,6 +14,7 @@ import io.kiroku.runtime.bridge.errors.ExtensionBridgeException
 import io.kiroku.runtime.ipc.Anime
 import io.kiroku.runtime.ipc.AnimeDetails
 import io.kiroku.runtime.ipc.BackendType
+import io.kiroku.runtime.ipc.Chapter
 import io.kiroku.runtime.ipc.Episode
 import io.kiroku.runtime.ipc.ErrorCode
 import io.kiroku.runtime.ipc.Extension
@@ -22,6 +23,9 @@ import io.kiroku.runtime.ipc.ExtensionRepository
 import io.kiroku.runtime.ipc.IRuntimeCallback
 import io.kiroku.runtime.ipc.IRuntimeHost
 import io.kiroku.runtime.ipc.LogEntry
+import io.kiroku.runtime.ipc.Manga
+import io.kiroku.runtime.ipc.MangaDetails
+import io.kiroku.runtime.ipc.MangaPage
 import io.kiroku.runtime.ipc.RepositoryExtension
 import io.kiroku.runtime.ipc.RpcRequest
 import io.kiroku.runtime.ipc.RpcResponse
@@ -351,6 +355,79 @@ class KirokuRuntimeBridge(
                 RuntimeParams.EPISODE_ID to episodeId,
             ),
             StreamSource.serializer(),
+        )
+
+    override suspend fun searchManga(
+        extensionId: String,
+        query: String,
+        sourceId: String?,
+        page: Int,
+    ): List<Manga> = callForList(
+        RuntimeMethods.MANGA_SEARCH,
+        jsonOf(
+            RuntimeParams.EXTENSION_ID to extensionId,
+            RuntimeParams.SOURCE_ID to sourceId,
+            RuntimeParams.QUERY to query,
+            RuntimeParams.PAGE to page,
+        ),
+        Manga.serializer(),
+    )
+
+    override suspend fun popularManga(extensionId: String, sourceId: String?, page: Int): List<Manga> =
+        callForList(
+            RuntimeMethods.MANGA_POPULAR,
+            jsonOf(
+                RuntimeParams.EXTENSION_ID to extensionId,
+                RuntimeParams.SOURCE_ID to sourceId,
+                RuntimeParams.PAGE to page,
+            ),
+            Manga.serializer(),
+        )
+
+    override suspend fun latestManga(extensionId: String, sourceId: String?, page: Int): List<Manga> =
+        callForList(
+            RuntimeMethods.MANGA_LATEST,
+            jsonOf(
+                RuntimeParams.EXTENSION_ID to extensionId,
+                RuntimeParams.SOURCE_ID to sourceId,
+                RuntimeParams.PAGE to page,
+            ),
+            Manga.serializer(),
+        )
+
+    override suspend fun getMangaDetails(extensionId: String, mangaId: String, sourceId: String?): MangaDetails =
+        decode(
+            call(
+                RuntimeMethods.MANGA_DETAILS,
+                jsonOf(
+                    RuntimeParams.EXTENSION_ID to extensionId,
+                    RuntimeParams.SOURCE_ID to sourceId,
+                    RuntimeParams.MANGA_ID to mangaId,
+                ),
+            ),
+            MangaDetails.serializer(),
+        )
+
+    override suspend fun getChapters(extensionId: String, mangaId: String, sourceId: String?): List<Chapter> =
+        callForList(
+            RuntimeMethods.MANGA_CHAPTERS,
+            jsonOf(
+                RuntimeParams.EXTENSION_ID to extensionId,
+                RuntimeParams.SOURCE_ID to sourceId,
+                RuntimeParams.MANGA_ID to mangaId,
+            ),
+            Chapter.serializer(),
+        )
+
+    override suspend fun getPages(extensionId: String, chapterId: String, sourceId: String?): List<MangaPage> =
+        callForList(
+            RuntimeMethods.MANGA_PAGES,
+            jsonOf(
+                RuntimeParams.EXTENSION_ID to extensionId,
+                RuntimeParams.SOURCE_ID to sourceId,
+                RuntimeParams.CHAPTER_ID to chapterId,
+            ),
+            MangaPage.serializer(),
         )
 
     override suspend fun getLogs(limit: Int): List<LogEntry> =
