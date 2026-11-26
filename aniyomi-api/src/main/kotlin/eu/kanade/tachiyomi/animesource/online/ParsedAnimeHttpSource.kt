@@ -57,8 +57,9 @@ abstract class ParsedAnimeHttpSource : AnimeHttpSource() {
         val episodes = document.select(episodeListSelector()).map(::episodeFromElement).toMutableList()
         var next = episodeListNextPageSelector()
         while (next != null) {
+            val nextUrl = response.request.url.resolve(next) ?: break
             val nextPage = client.newCall(
-                Request.Builder().url(response.request.url.resolve(next) ?: next).headers(headers).build(),
+                Request.Builder().url(nextUrl).headers(headers).build(),
             ).execute().use { it.asJsoup() }
             episodes += nextPage.select(episodeListSelector()).map(::episodeFromElement)
             next = episodeListNextPageSelector()
@@ -103,11 +104,11 @@ abstract class ParsedAnimeHttpSource : AnimeHttpSource() {
         document: Document,
         selector: String,
         mapper: (Element) -> SAnime,
-        nextPageSelector: () -> String?,
+        nextPageSelector: String?,
     ): AnimesPage {
         if (selector.isBlank()) return AnimesPage(emptyList(), false)
         val animes = document.select(selector).map(mapper)
-        val hasNext = nextPageSelector()?.let { document.select(it).isNotEmpty() } ?: false
+        val hasNext = nextPageSelector?.let { document.select(it).isNotEmpty() } ?: false
         return AnimesPage(animes, hasNext)
     }
 }

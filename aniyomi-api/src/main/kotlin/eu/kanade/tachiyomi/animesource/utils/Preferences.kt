@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import eu.kanade.tachiyomi.animesource.AnimeSource
 import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 /** Gets preference key for source with [id]. */
 fun preferencesKey(id: Long) = "source_$id"

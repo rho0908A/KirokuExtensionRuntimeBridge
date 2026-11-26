@@ -72,7 +72,7 @@ internal object ProtoIndex {
             when (field.number) {
                 1 -> name = field.text()
                 2 -> pkg = field.text()
-                3 -> parseMessage(field.bytes.orEmpty()).forEach { sub ->
+                3 -> field.bytes?.let(::parseMessage)?.forEach { sub ->
                     when (sub.number) {
                         1 -> apkUrl = sub.text()
                         2 -> iconUrl = sub.text()
@@ -82,7 +82,7 @@ internal object ProtoIndex {
                 5 -> versionCode = field.int
                 6 -> versionName = field.text()
                 7 -> nsfw = field.int.toInt()
-                8 -> parseMessage(field.bytes.orEmpty())
+                8 -> field.bytes?.let(::parseMessage).orEmpty()
                     .firstOrNull { it.number == 3 }?.text()?.takeIf { it.isNotBlank() }?.let(languages::add)
             }
         }
