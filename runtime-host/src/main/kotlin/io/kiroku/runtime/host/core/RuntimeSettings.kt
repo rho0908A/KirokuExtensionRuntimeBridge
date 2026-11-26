@@ -8,18 +8,17 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * User-visible settings of the Runtime Host, mirrored by the Extension Manager screen.
  *
- * Everything here has a concrete effect on installation or loading; settings for features the
- * runtime does not implement (Aniyomi manga extensions) are kept only so the UI can explain why
- * they are unavailable instead of pretending they work.
+ * Anime packages (Anikku API) and manga packages (Mihon API) are installed by the same backend, so
+ * both sets of settings have a concrete effect.
  */
 data class HostSettings(
     /** Copy installed Aniyomi anime APKs into the runtime's private store. */
     val aniyomiInternalAnimeInstalls: Boolean = true,
-    /** Reserved: the runtime ships an anime API only, so manga packages cannot be executed. */
-    val aniyomiInternalMangaInstalls: Boolean = false,
+    /** Copy installed Mihon manga APKs into the runtime's private store. */
+    val aniyomiInternalMangaInstalls: Boolean = true,
     /** Directory the user picked as their custom Aniyomi anime APK path. */
     val aniyomiAnimeApkPath: String? = null,
-    /** Reserved for the same reason as [aniyomiInternalMangaInstalls]. */
+    /** Directory the user picked as their custom manga APK path. */
     val aniyomiMangaApkPath: String? = null,
     /** Packages (other than same-signature ones) allowed to bind to the runtime. */
     val allowedClients: Set<String> = emptySet(),
@@ -40,6 +39,10 @@ class RuntimeSettings(context: Context) {
 
     fun setAniyomiAnimeApkPath(path: String?) = update {
         it.copy(aniyomiAnimeApkPath = path?.takeIf { value -> value.isNotBlank() })
+    }
+
+    fun setAniyomiInternalMangaInstalls(enabled: Boolean) = update {
+        it.copy(aniyomiInternalMangaInstalls = enabled)
     }
 
     fun setAniyomiMangaApkPath(path: String?) = update {
@@ -67,7 +70,7 @@ class RuntimeSettings(context: Context) {
 
     private fun read(): HostSettings = HostSettings(
         aniyomiInternalAnimeInstalls = prefs.getBoolean(KEY_INTERNAL_ANIME, true),
-        aniyomiInternalMangaInstalls = prefs.getBoolean(KEY_INTERNAL_MANGA, false),
+        aniyomiInternalMangaInstalls = prefs.getBoolean(KEY_INTERNAL_MANGA, true),
         aniyomiAnimeApkPath = prefs.getString(KEY_ANIME_PATH, null),
         aniyomiMangaApkPath = prefs.getString(KEY_MANGA_PATH, null),
         allowedClients = prefs.getStringSet(KEY_CLIENTS, emptySet()).orEmpty(),

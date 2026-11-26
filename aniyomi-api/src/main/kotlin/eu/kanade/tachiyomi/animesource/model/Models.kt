@@ -38,6 +38,7 @@ interface SAnime : Serializable {
         return genre?.split(", ")?.map { it.trim() }?.filterNot { it.isBlank() }?.distinct()
     }
 
+    // "SY" compatibility accessors (Aniyomi stored originals separately from the live values).
     val originalTitle: String get() = title
     val originalAuthor: String? get() = author
     val originalArtist: String? get() = artist

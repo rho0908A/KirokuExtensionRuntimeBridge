@@ -63,6 +63,8 @@ data class RuntimeCapabilities(
     val subtitleExtraction: Boolean = false,
     val audioTrackExtraction: Boolean = false,
     val runtimeLogs: Boolean = false,
+    /** True when at least one backend can execute manga sources. */
+    val mangaExtraction: Boolean = false,
 ) {
     fun supports(backend: BackendType): Boolean = backend in backends
 }
@@ -114,6 +116,12 @@ data class ExtensionCapabilities(
     val filters: Boolean = false,
     val preferences: Boolean = false,
     val hosts: Boolean = false,
+    /** True when the extension executes a manga ecosystem (Mihon APK). */
+    val manga: Boolean = false,
+    /** True when the source exposes chapter lists. */
+    val chapters: Boolean = false,
+    /** True when the source exposes page images. */
+    val pages: Boolean = false,
 )
 
 /** Metadata that is read from the extension package without executing extension code. */

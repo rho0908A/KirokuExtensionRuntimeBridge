@@ -142,6 +142,16 @@ class RuntimeHostViewModel(application: Application) : AndroidViewModel(applicat
         notify("Custom anime APK path updated")
     }
 
+    fun setInternalMangaInstalls(enabled: Boolean) {
+        manager.settings.setAniyomiInternalMangaInstalls(enabled)
+        notify(if (enabled) "Manga installs stay inside the runtime" else "Manga installs are mirrored to the custom path")
+    }
+
+    fun setMangaPath(path: String) {
+        manager.settings.setAniyomiMangaApkPath(path)
+        notify("Custom manga APK path updated")
+    }
+
     fun clearLogs() {
         manager.logs.clear()
     }

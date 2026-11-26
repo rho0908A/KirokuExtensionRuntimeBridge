@@ -2,10 +2,14 @@ package io.kiroku.runtime.bridge.api
 
 import io.kiroku.runtime.ipc.Anime
 import io.kiroku.runtime.ipc.AnimeDetails
+import io.kiroku.runtime.ipc.Chapter
 import io.kiroku.runtime.ipc.Episode
 import io.kiroku.runtime.ipc.Extension
 import io.kiroku.runtime.ipc.ExtensionRepository
 import io.kiroku.runtime.ipc.LogEntry
+import io.kiroku.runtime.ipc.Manga
+import io.kiroku.runtime.ipc.MangaDetails
+import io.kiroku.runtime.ipc.MangaPage
 import io.kiroku.runtime.ipc.RepositoryExtension
 import io.kiroku.runtime.ipc.RuntimeInfo
 import io.kiroku.runtime.ipc.RuntimeStatus
@@ -95,6 +99,39 @@ interface ExtensionBridge {
         episodeId: String,
         sourceId: String? = null,
     ): List<StreamSource>
+
+    // ---------------------------------------------------------------------------------------------
+    // Manga (Mihon extensions, executed by the Aniyomi backend)
+    // ---------------------------------------------------------------------------------------------
+
+    suspend fun searchManga(
+        extensionId: String,
+        query: String,
+        sourceId: String? = null,
+        page: Int = 1,
+    ): List<Manga>
+
+    suspend fun popularManga(extensionId: String, sourceId: String? = null, page: Int = 1): List<Manga>
+
+    suspend fun latestManga(extensionId: String, sourceId: String? = null, page: Int = 1): List<Manga>
+
+    suspend fun getMangaDetails(
+        extensionId: String,
+        mangaId: String,
+        sourceId: String? = null,
+    ): MangaDetails
+
+    suspend fun getChapters(
+        extensionId: String,
+        mangaId: String,
+        sourceId: String? = null,
+    ): List<Chapter>
+
+    suspend fun getPages(
+        extensionId: String,
+        chapterId: String,
+        sourceId: String? = null,
+    ): List<MangaPage>
 
     suspend fun getLogs(limit: Int = 200): List<LogEntry>
 

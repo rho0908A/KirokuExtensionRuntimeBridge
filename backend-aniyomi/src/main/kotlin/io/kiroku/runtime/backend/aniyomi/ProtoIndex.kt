@@ -105,6 +105,10 @@ internal object ProtoIndex {
         )
     }
 
+    // ---------------------------------------------------------------------------------------------
+    // Wire format
+    // ---------------------------------------------------------------------------------------------
+
     private fun parseMessage(bytes: ByteArray): List<Field> {
         val fields = mutableListOf<Field>()
         var index = 0

@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.source.online
 
 import eu.kanade.tachiyomi.network.asJsoup
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -12,8 +11,8 @@ import org.jsoup.nodes.Element
 /**
  * Selector driven manga source, matching Mihon's `ParsedHttpSource`.
  *
- * The selector members are open (Mihon marks several abstract) so that packages built against a
- * different extension-library generation still load.
+ * The selector members are open (Anikku/Mihon mark several abstract) so that packages built
+ * against a different extension-library generation still load.
  */
 abstract class ParsedHttpSource : HttpSource() {
 
@@ -26,28 +25,28 @@ abstract class ParsedHttpSource : HttpSource() {
         selector: String,
         mapper: (Element) -> SManga,
         nextPageSelector: () -> String?,
-    ): MangasPage {
-        if (selector.isBlank()) return MangasPage(emptyList(), false)
+    ): eu.kanade.tachiyomi.source.model.MangasPage {
+        if (selector.isBlank()) return eu.kanade.tachiyomi.source.model.MangasPage(emptyList(), false)
         val mangas = document.select(selector).map(mapper)
         val hasNext = nextPageSelector()?.let { document.select(it).isNotEmpty() } ?: false
-        return MangasPage(mangas, hasNext)
+        return eu.kanade.tachiyomi.source.model.MangasPage(mangas, hasNext)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage =
+    override fun popularMangaParse(response: Response): eu.kanade.tachiyomi.source.model.MangasPage =
         parseMangas(response.asJsoup(), popularMangaSelector(), ::popularMangaFromElement, ::popularMangaNextPageSelector)
 
     protected open fun searchMangaSelector(): String = popularMangaSelector()
     protected open fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
     protected open fun searchMangaNextPageSelector(): String? = popularMangaNextPageSelector()
 
-    override fun searchMangaParse(response: Response): MangasPage =
+    override fun searchMangaParse(response: Response): eu.kanade.tachiyomi.source.model.MangasPage =
         parseMangas(response.asJsoup(), searchMangaSelector(), ::searchMangaFromElement, ::searchMangaNextPageSelector)
 
     protected open fun latestUpdatesSelector(): String = popularMangaSelector()
     protected open fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
     protected open fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
+    override fun latestUpdatesParse(response: Response): eu.kanade.tachiyomi.source.model.MangasPage =
         parseMangas(response.asJsoup(), latestUpdatesSelector(), ::latestUpdatesFromElement, ::latestUpdatesNextPageSelector)
 
     protected open fun mangaDetailsParse(document: Document): SManga = SManga.create()

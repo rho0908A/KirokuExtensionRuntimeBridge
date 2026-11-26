@@ -41,6 +41,10 @@ abstract class HttpSource : CatalogueSource {
     override val supportsLatest: Boolean
         get() = true
 
+    // ---------------------------------------------------------------------------------------------
+    // Browsing
+    // ---------------------------------------------------------------------------------------------
+
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = rx {
         client.newCall(popularMangaRequest(page)).awaitSuccess().use { popularMangaParse(it) }
     }
@@ -71,6 +75,10 @@ abstract class HttpSource : CatalogueSource {
     protected open fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
 
     protected open fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+
+    // ---------------------------------------------------------------------------------------------
+    // Details / chapters / pages
+    // ---------------------------------------------------------------------------------------------
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = rx { fetchMangaDetailsNow(manga) }
 
@@ -129,6 +137,10 @@ abstract class HttpSource : CatalogueSource {
         .build()
 
     protected open fun imageUrlParse(response: Response): String = response.request.url.toString()
+
+    // ---------------------------------------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------------------------------------
 
     override fun getFilterList(): FilterList = FilterList()
 

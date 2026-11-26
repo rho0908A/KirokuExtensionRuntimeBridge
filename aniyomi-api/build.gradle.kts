@@ -4,14 +4,12 @@ plugins {
 }
 
 /**
- * Binary compatibility layer for extension APKs.
+ * Binary compatibility layer for Aniyomi "lib 12..17" anime extensions.
  *
- * Neither Aniyomi nor Anikku publishes a usable `extensions-lib` artifact while extensions are built
- * with it as `compileOnly`, so the host has to provide these classes at runtime. This module
- * reproduces the API of the maintained hosts:
- *
- *  - anime: Anikku `eu.kanade.tachiyomi.animesource` (extensions-lib 12..16)
- *  - manga: Mihon  `eu.kanade.tachiyomi.source`      (extensions-lib 1.4..1.6)
+ * Aniyomi does not publish `extensions-lib` to a public Maven repository (the JitPack build only
+ * produces an empty root jar), while extensions are compiled with those classes as `compileOnly`
+ * and therefore expect the *host* to provide them at runtime. This module is that host-side API:
+ * the same package names, types and method signatures the extensions were compiled against.
  *
  * Keep this module free of extension-specific logic: it is an API surface, not a backend.
  */

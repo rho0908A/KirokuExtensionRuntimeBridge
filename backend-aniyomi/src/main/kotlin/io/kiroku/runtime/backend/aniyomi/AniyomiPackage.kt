@@ -55,6 +55,7 @@ object AniyomiPackage {
     /** Mihon accepts 1.4 and 1.6; 1.5 packages use the same contract as 1.4. */
     val SUPPORTED_MANGA_LIB_VERSIONS = listOf(1.4, 1.5, 1.6)
 
+    /** Backwards compatible alias used by older call sites. */
     val SUPPORTED_LIB_VERSIONS: IntRange get() = SUPPORTED_ANIME_LIB_VERSIONS
 
     private const val MAX_PACKAGE_BYTES = 128L * 1024 * 1024
@@ -161,7 +162,7 @@ object AniyomiPackage {
         animeLibVersion(info)?.let { it in SUPPORTED_ANIME_LIB_VERSIONS } == true
 
     fun isMangaLibSupported(info: PackageInfo): Boolean =
-        isMangaLibVersionSupported(mangaLibVersion(info)?.toString())
+        mangaLibVersion(info)?.let { version -> SUPPORTED_MANGA_LIB_VERSIONS.any { kotlin.math.abs(it - version) < 0.001 } } == true
 
     fun isSupportedLibVersion(versionName: String?): Boolean =
         libMajor(versionName)?.let { it in SUPPORTED_ANIME_LIB_VERSIONS } == true
@@ -237,6 +238,7 @@ object AniyomiPackage {
         return null
     }
 
+    /** Extensions never need dangerous permissions; requesting them is treated as hostile metadata. */
     private fun dangerousPermissions(info: PackageInfo): List<String>? {
         val requested = info.requestedPermissions.orEmpty()
         if (requested.isEmpty()) return null

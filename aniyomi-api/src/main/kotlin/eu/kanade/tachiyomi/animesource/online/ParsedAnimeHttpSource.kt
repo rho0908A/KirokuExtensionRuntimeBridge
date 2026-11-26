@@ -1,11 +1,13 @@
 package eu.kanade.tachiyomi.animesource.online
 
+import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.asJsoup
+import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -18,51 +20,51 @@ import org.jsoup.nodes.Element
  */
 abstract class ParsedAnimeHttpSource : AnimeHttpSource() {
 
-    protected open fun popularAnimeSelector(): String = ""
-    protected open fun popularAnimeFromElement(element: Element): SAnime = SAnime.create()
-    protected open fun popularAnimeNextPageSelector(): String? = null
+    protected abstract fun popularAnimeSelector(): String
+    protected abstract fun popularAnimeFromElement(element: Element): SAnime
+    protected abstract fun popularAnimeNextPageSelector(): String?
 
-    override fun popularAnimeParse(response: Response): AnimesPage = parseAnimePage(
-        response.asJsoup(),
-        popularAnimeSelector(),
-        ::popularAnimeFromElement,
-        ::popularAnimeNextPageSelector,
-    )
+    override fun popularAnimeRequest(page: Int): Request = super.popularAnimeRequest(page)
 
-    protected open fun searchAnimeSelector(): String = popularAnimeSelector()
-    protected open fun searchAnimeFromElement(element: Element): SAnime = popularAnimeFromElement(element)
-    protected open fun searchAnimeNextPageSelector(): String? = popularAnimeNextPageSelector()
+    override fun popularAnimeParse(response: Response): AnimesPage =
+        parseAnimePage(response.asJsoup(), popularAnimeSelector(), ::popularAnimeFromElement, popularAnimeNextPageSelector())
 
-    override fun searchAnimeParse(response: Response): AnimesPage = parseAnimePage(
-        response.asJsoup(),
-        searchAnimeSelector(),
-        ::searchAnimeFromElement,
-        ::searchAnimeNextPageSelector,
-    )
+    protected abstract fun searchAnimeSelector(): String
+    protected abstract fun searchAnimeFromElement(element: Element): SAnime
+    protected abstract fun searchAnimeNextPageSelector(): String?
+
+    override fun searchAnimeParse(response: Response): AnimesPage =
+        parseAnimePage(response.asJsoup(), searchAnimeSelector(), ::searchAnimeFromElement, searchAnimeNextPageSelector())
 
     protected open fun latestUpdatesSelector(): String = popularAnimeSelector()
     protected open fun latestUpdatesFromElement(element: Element): SAnime = popularAnimeFromElement(element)
     protected open fun latestUpdatesNextPageSelector(): String? = popularAnimeNextPageSelector()
 
-    override fun latestUpdatesParse(response: Response): AnimesPage = parseAnimePage(
-        response.asJsoup(),
-        latestUpdatesSelector(),
-        ::latestUpdatesFromElement,
-        ::latestUpdatesNextPageSelector,
-    )
+    override fun latestUpdatesParse(response: Response): AnimesPage =
+        parseAnimePage(response.asJsoup(), latestUpdatesSelector(), ::latestUpdatesFromElement, latestUpdatesNextPageSelector())
 
-    protected open fun animeDetailsParse(document: Document): SAnime = SAnime.create()
+    protected abstract fun animeDetailsParse(document: Document): SAnime
 
     override fun animeDetailsParse(response: Response): SAnime = animeDetailsParse(response.asJsoup())
 
-    protected open fun episodeListSelector(): String = ""
-    protected open fun episodeFromElement(element: Element): SEpisode = SEpisode.create()
+    protected abstract fun episodeListSelector(): String
+    protected abstract fun episodeFromElement(element: Element): SEpisode
+
+    protected open fun episodeListNextPageSelector(): String? = null
 
     override fun episodeListParse(response: Response): List<SEpisode> {
         val document = response.asJsoup()
-        val selector = episodeListSelector()
-        if (selector.isBlank()) return emptyList()
-        return document.select(selector).map(::episodeFromElement)
+        val episodes = document.select(episodeListSelector()).map(::episodeFromElement).toMutableList()
+        var next = episodeListNextPageSelector()
+        while (next != null) {
+            val nextPage = client.newCall(
+                Request.Builder().url(response.request.url.resolve(next) ?: next).headers(headers).build(),
+            ).execute().use { it.asJsoup() }
+            episodes += nextPage.select(episodeListSelector()).map(::episodeFromElement)
+            next = episodeListNextPageSelector()
+            if (nextPage.select(episodeListSelector()).isEmpty()) break
+        }
+        return episodes
     }
 
     protected open fun seasonListSelector(): String = episodeListSelector()
@@ -78,20 +80,24 @@ abstract class ParsedAnimeHttpSource : AnimeHttpSource() {
     )
 
     override fun hosterListParse(response: Response): List<Hoster> {
+        val document = response.asJsoup()
         val selector = hosterListSelector()
         if (selector.isBlank()) return emptyList()
-        return response.asJsoup().select(selector).map(::hosterFromElement).filter { it.hosterUrl.isNotBlank() }
+        return document.select(selector).map(::hosterFromElement).filter { it.hosterUrl.isNotBlank() }
     }
 
     protected open fun videoListParse(document: Document): List<Video> = emptyList()
 
     override fun videoListParse(response: Response): List<Video> = videoListParse(response.asJsoup())
 
-    protected open fun videoListParse(document: Document, hoster: Hoster): List<Video> =
-        videoListParse(document)
+    protected open fun videoListParse(document: Document, hoster: Hoster): List<Video> = videoListParse(document)
 
     override fun videoListParse(response: Response, hoster: Hoster): List<Video> =
         videoListParse(response.asJsoup(), hoster)
+
+    protected open fun videoFromElement(element: Element): Video? = null
+
+    protected open fun videoListSelector(): String = ""
 
     private fun parseAnimePage(
         document: Document,
