@@ -31,8 +31,12 @@ The bridge is independent of Kiroku (or any other player). Kiroku is simply the 
 Everything is Kotlin + Gradle Kotlin DSL + native Android APIs. There is no Dart, React Native,
 Node, Python or web runtime anywhere in this project.
 
-## What's new in 1.1.0
+## What's new in 1.1.1
 
+* **Fixed the 1.1.0 startup crash.** That build packaged `kotlin-reflect` 2.4.0 next to a 2.2.20
+  stdlib, so the Host died with `NoClassDefFoundError: kotlin/jvm/internal/KotlinGenericDeclaration`
+  before the first screen. Every Kotlin runtime artifact is now pinned to the project's Kotlin
+  version in the root `build.gradle.kts`.
 * **Manga extensions.** Mihon manga APKs (`tachiyomi.extension`, lib 1.4–1.6) load and execute next to
   the anime ones, and the SDK gained `searchManga`, `popularManga`, `latestManga`, `getMangaDetails`,
   `getChapters` and `getPages`.
@@ -47,7 +51,7 @@ Node, Python or web runtime anywhere in this project.
 * **Builds are green.** The `Android` workflow runs `gradle test` and assembles
   `:runtime-host:assembleDebug`, `:sample-host:assembleDebug`, `:bridge-sdk:assembleRelease` and
   `:bridge-ipc:assembleRelease` on every push to `main`. The installable APK and the two SDK
-  libraries for the current version (`1.1.0`) are attached to
+  libraries for the current version (`1.1.1`) are attached to
   [Releases](https://github.com/rho0908A/KirokuExtensionRuntimeBridge/releases); debug builds and the
   sample client are on the run page under **Artifacts → `kiroku-runtime-bridge`**.
 * **Runtime behaviour is not verified on hardware.** No device or emulator test has been run:
@@ -107,7 +111,7 @@ separate package). It must be installed and the user must launch it once.
 ### 2. Add the SDK to your app
 
 The release page publishes both libraries with the release version in their names, so the fastest
-path is to download `bridge-sdk-1.1.0.aar` and `bridge-ipc-1.1.0.aar` into `app/libs/`. To build them
+path is to download `bridge-sdk-1.1.1.aar` and `bridge-ipc-1.1.1.aar` into `app/libs/`. To build them
 yourself instead:
 
 ```bash
@@ -130,8 +134,8 @@ android {
 
 dependencies {
     // names as published on the release page; rename if you built the AARs yourself
-    implementation(files("libs/bridge-sdk-1.1.0.aar"))
-    implementation(files("libs/bridge-ipc-1.1.0.aar"))
+    implementation(files("libs/bridge-sdk-1.1.1.aar"))
+    implementation(files("libs/bridge-ipc-1.1.1.aar"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }
 ```
