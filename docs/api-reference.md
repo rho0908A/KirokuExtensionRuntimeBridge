@@ -43,7 +43,10 @@ suspend fun removeRepository(repositoryId: String): Boolean
 
 Refreshing the catalogue is `getAvailableExtensions()`.
 
-### Sources
+### Anime sources
+
+Anikku anime extensions (extensions-lib 12–16). `EXTENSION_UNSUPPORTED` when the source does not offer
+the call.
 
 ```kotlin
 suspend fun search(extensionId: String, query: String, sourceId: String? = null, page: Int = 1): List<Anime>
@@ -52,6 +55,20 @@ suspend fun latest(extensionId: String, sourceId: String? = null, page: Int = 1)
 suspend fun getDetails(extensionId: String, animeId: String, sourceId: String? = null): AnimeDetails
 suspend fun getEpisodes(extensionId: String, animeId: String, sourceId: String? = null): List<Episode>
 suspend fun extractStreams(extensionId: String, episodeId: String, sourceId: String? = null): List<StreamSource>
+```
+
+### Manga sources
+
+Mihon manga extensions (extensions-lib 1.4–1.6), identified by `extension.capabilities.manga`.
+`EXTENSION_UNSUPPORTED` when the extension is an anime source or does not expose chapters/pages.
+
+```kotlin
+suspend fun searchManga(extensionId: String, query: String, sourceId: String? = null, page: Int = 1): List<Manga>
+suspend fun popularManga(extensionId: String, sourceId: String? = null, page: Int = 1): List<Manga>
+suspend fun latestManga(extensionId: String, sourceId: String? = null, page: Int = 1): List<Manga>
+suspend fun getMangaDetails(extensionId: String, mangaId: String, sourceId: String? = null): MangaDetails
+suspend fun getChapters(extensionId: String, mangaId: String, sourceId: String? = null): List<Chapter>
+suspend fun getPages(extensionId: String, chapterId: String, sourceId: String? = null): List<MangaPage>
 ```
 
 ### Diagnostics
@@ -88,6 +105,14 @@ data class Extension(
     val loadError: ExtensionError?,
 )
 
+// capabilities.manga marks a Mihon manga extension; capabilities.chapters/pages follow from it.
+data class ExtensionCapabilities(
+    val search: Boolean, val popular: Boolean, val latest: Boolean, val details: Boolean,
+    val episodes: Boolean, val streams: Boolean, val subtitles: Boolean, val audioTracks: Boolean,
+    val filters: Boolean, val preferences: Boolean, val hosts: Boolean,
+    val manga: Boolean, val chapters: Boolean, val pages: Boolean,
+)
+
 data class ExtensionMetadata(
     val name: String, val packageName: String, val versionName: String, val versionCode: Long,
     val description: String?, val language: String?, val isNsfw: Boolean,
@@ -109,6 +134,23 @@ data class Anime(
     val id: String, val title: String, val url: String?, val coverUrl: String?,
     val description: String?, val genres: List<String>, val author: String?, val artist: String?,
     val status: String?, val year: Int?, val extensionId: String?,
+)
+
+data class Manga(
+    val id: String, val title: String, val url: String?, val coverUrl: String?,
+    val description: String?, val genres: List<String>, val author: String?, val artist: String?,
+    val status: String?, val extensionId: String?,
+)
+
+data class MangaDetails(val manga: Manga, val chapters: List<Chapter>, val extensionId: String?)
+
+data class Chapter(
+    val id: String, val mangaId: String?, val name: String, val url: String?,
+    val chapterNumber: Double?, val scanlator: String?, val dateUpload: Long?,
+)
+
+data class MangaPage(
+    val index: Int, val url: String, val imageUrl: String?, val headers: Map<String, String>,
 )
 
 data class AnimeDetails(val anime: Anime, val episodes: List<Episode>, val extensionId: String?)

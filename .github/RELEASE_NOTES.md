@@ -35,7 +35,8 @@ Debug builds and the sample client are not published here — they are available
 2. Open the Runtime Host, go to **Repositories** and load the catalogue, then install Aniyomi/Anikku
    anime extensions or Mihon manga extensions from it (or use **Extensions → Load extension APK** for
    a file you already have).
-.The APK is signed with the standard debug keystore so it installs without extra setup. It is not
+
+The APK is signed with the standard debug keystore so it installs without extra setup. It is not
 Play-Store distributable: rebuild with your own keystore before distributing.
 
 ### Use the SDK in your app

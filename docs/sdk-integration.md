@@ -2,11 +2,14 @@
 
 ## 1. Add the dependency
 
-Build the AAR and copy it into your app's `libs/` folder:
+Download `bridge-sdk-<version>.aar` and `bridge-ipc-<version>.aar` from the latest
+[release](https://github.com/rho0908A/KirokuExtensionRuntimeBridge/releases) into your app's `libs/`
+folder, or build them from source:
 
 ```bash
-gradle :bridge-sdk:assembleRelease
+gradle :bridge-sdk:assembleRelease :bridge-ipc:assembleRelease
 # bridge-sdk/build/outputs/aar/bridge-sdk-release.aar
+# bridge-ipc/build/outputs/aar/bridge-ipc-release.aar
 ```
 
 ```kotlin
@@ -60,6 +63,28 @@ streams.forEach { println("${it.quality} ${it.url}") }
 
 `Anime.id`, `Episode.id` and `StreamSource.url` come straight from the extension. Pass
 `sourceId` as the third argument when an extension exposes several sources.
+
+### Manga
+
+Manga extensions are Mihon APKs (`tachiyomi.extension`, lib 1.4–1.6) and advertise themselves with
+`capabilities.manga`; they answer the manga calls and reject the anime ones with
+`EXTENSION_UNSUPPORTED`.
+
+```kotlin
+val mangaExtensions = bridge.getExtensions().filter { it.capabilities.manga }
+val extension = mangaExtensions.first { it.loadError == null }
+
+val mangas   = bridge.searchManga(extension.id, "frieren")
+val details  = bridge.getMangaDetails(extension.id, mangas.first().id)
+val chapters = bridge.getChapters(extension.id, mangas.first().id)
+val pages    = bridge.getPages(extension.id, chapters.first().id)
+
+pages.forEach { page -> reader.load(page.imageUrl ?: page.url, page.headers) }
+```
+
+`popularManga` and `latestManga` mirror `popular`/`latest`. Pass `sourceId` when a manga extension
+exposes several sources. Every `MangaPage` carries the `headers` its image request needs (Referer,
+User-Agent), so forward them to the image loader.
 
 ## 5. Observe state
 

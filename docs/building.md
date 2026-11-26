@@ -40,19 +40,45 @@ Artifacts:
 
 ## CI
 
-`.github/workflows/android.yml` builds on every push and pull request:
+`.github/workflows/android.yml` builds on every push to `main`, every pull request and on manual
+dispatch:
 
 1. JDK 17 + Android SDK (platform 34, build-tools 35.0.0) and Gradle 8.7 via `gradle/actions/setup-gradle`.
 2. `gradle test`.
-3. `gradle :runtime-host:assembleDebug :sample-host:assembleDebug :bridge-sdk:assembleRelease`.
-4. Uploads the APKs, the AARs and the test reports as workflow artifacts.
+3. `gradle :runtime-host:assembleDebug :runtime-host:assembleRelease :sample-host:assembleDebug
+   :sample-host:assembleRelease :bridge-sdk:assembleRelease :bridge-ipc:assembleRelease`.
+4. Uploads the APKs, the AARs and the test reports as workflow artifacts (`kiroku-runtime-bridge`).
 
-The workflow only produces artifacts. Nothing is published or signed for release automatically, and
-no secrets are required.
+A plain build needs no secrets. Only the release step uses `GITHUB_TOKEN`, which GitHub provides.
+
+## Releasing
+
+The release is produced by the same workflow, with the `release_tag` dispatch input set. Run it
+against `main` after the version bump is merged:
+
+```bash
+gh workflow run android.yml -f release_tag=v1.1.0
+```
+
+That run does the normal build, then copies
+`runtime-host/build/outputs/apk/release/runtime-host-release.apk` to
+`KirokuRuntimeHost-<version>.apk` and the two AARs to `bridge-sdk-<version>.aar` /
+`bridge-ipc-<version>.aar`, and publishes them as a GitHub Release tagged `v<version>` using
+`.github/RELEASE_NOTES.md` as the body. `--latest` is applied, so the newest release is the one the
+README links to.
+
+Checklist for a release:
+
+1. Bump `versionCode` and `versionName` in `runtime-host/build.gradle.kts` (single source of truth —
+   the workflow reads the name from there).
+2. Update `README.md` (what's new) and `.github/RELEASE_NOTES.md`.
+3. Push to `main`, wait for the `Android` run to pass.
+4. `gh workflow run android.yml -f release_tag=v<version>` and confirm the release assets.
 
 ## Versioning
 
 * `PROTOCOL_VERSION` in `bridge-ipc` guards wire compatibility.
-* `versionName` of the runtime and the SDK move together per release.
-* Backend API surfaces follow the upstream library versions they emulate (Aniyomi lib 12–17,
-  CloudStream 4.9.1).
+* `versionName` of the runtime and the SDK move together per release; the AAR assets are published
+  with the same version in their file names.
+* Backend API surfaces follow the upstream library versions they emulate (Anikku anime extensions-lib
+  12–16, Mihon manga extensions-lib 1.4–1.6, CloudStream 4.9.1).
