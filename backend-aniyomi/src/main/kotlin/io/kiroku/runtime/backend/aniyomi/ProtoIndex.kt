@@ -16,7 +16,7 @@ import java.util.zip.GZIPInputStream
  *   string shortName = 2;
  *   string signingKeyFingerprint = 3;
  *   Links links = 4;
- *   repeated Extension extensions = 101;
+ *   Extensions extensions = 101;   // wrapper: repeated Extension extension = 1
  * }
  * Extension {
  *   string name = 1;
@@ -29,6 +29,10 @@ import java.util.zip.GZIPInputStream
  *   repeated Source sources = 8;  // 1 = id, 2 = name, 3 = lang, 4 = baseUrl
  * }
  * ```
+ *
+ * Field 101 is not the extension repeated directly: it is one wrapper message whose own field 1
+ * repeats `Extension`. Treating each 101 as an entry yields nothing, which is why a protobuf
+ * repository used to list zero extensions. Both shapes are accepted below.
  *
  * Only the fields the runtime needs are decoded; unknown fields are skipped, so a newer index
  * schema still parses.
@@ -47,14 +51,31 @@ internal object ProtoIndex {
         val nsfw: Boolean,
     )
 
+    private const val EXTENSIONS_FIELD = 101
+
     private data class Field(val number: Int, val wireType: Int, val int: Long = 0, val bytes: ByteArray? = null)
 
     fun decode(raw: ByteArray): List<Entry> {
         val payload = gunzipIfNeeded(raw)
-        return parseMessage(payload)
-            .filter { it.number == 101 && it.wireType == 2 }
-            .mapNotNull { field -> field.bytes?.let(::parseEntry) }
+        val entries = mutableListOf<Entry>()
+        parseMessage(payload)
+            .filter { it.number == EXTENSIONS_FIELD && it.wireType == 2 }
+            .forEach { field -> field.bytes?.let { entries += entriesOf(it) } }
+        return entries
+    }
+
+    /**
+     * Reads the wrapper at field 101. Current generators (Keiyoushi, Mihon) emit
+     * `101 { repeated Extension extension = 1 }`, older ones put a single `Extension` there.
+     */
+    private fun entriesOf(bytes: ByteArray): List<Entry> {
+        val nested = parseMessage(bytes)
+            .filter { it.number == 1 && it.wireType == 2 }
+            .mapNotNull { field -> field.bytes }
+            .map(::parseEntry)
             .filter { it.pkg.isNotBlank() && it.apkUrl.isNotBlank() }
+        if (nested.isNotEmpty()) return nested
+        return listOf(parseEntry(bytes)).filter { it.pkg.isNotBlank() && it.apkUrl.isNotBlank() }
     }
 
     private fun parseEntry(bytes: ByteArray): Entry {
