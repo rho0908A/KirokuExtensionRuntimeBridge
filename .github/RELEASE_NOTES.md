@@ -1,61 +1,59 @@
-## Kiroku Runtime Bridge 1.2.2
+## Kiroku Runtime Bridge 1.2.3
 
-Installs now go through on Android 14 and later, and anime extensions are recognised instead of
-being rejected before they are even loaded.
+Every manager repository now lists its catalogue, and the two install errors from 1.2.1 are fixed.
 
-### What the two errors in 1.2.1 were
+### Repositories other than the anime one showed nothing
 
-**`APK declares neither tachiyomi.animeextension nor tachiyomi.extension`** — an extension declares
-its ecosystem with a `<uses-feature>` tag, and Android only reports those tags through
-`PackageInfo.reqFeatures` when the APK is parsed with `PackageManager.GET_CONFIGURATIONS`. The
-runtime did not ask for them, so every package looked like it belonged to no ecosystem and was
-refused. Packages are now parsed with that flag, and the `<meta-data>` keys and the canonical
-package prefix are checked as fallbacks (that flag is also what OEM parsers are least reliable
-about).
+`Keiyoushi` (the manga repository) publishes its catalogue as `index.pb`, a gzipped protobuf index
+that `repo.json` points at through `index_v2`. Its `index.min.json` is now only a two-entry "update
+your app" placeholder. The runtime did follow `index_v2`, but it read the protobuf wrongly: field
+101 is not the extension repeated — it is one wrapper message whose own field 1 repeats every
+extension. Each wrapper was therefore parsed as a single malformed entry and thrown away, so the
+repository reported **0 extension(s)**.
 
-**`Could not create plugin class loader`** — this was Android 14's safer dynamic code loading. For
-apps targeting API 34, ART refuses to load a DEX/JAR/APK that is writable, and both backends load
-code from files they copy into the app's own data directory, which is writable by default. The
-extracted dex and the installed APK are now marked read-only before the class loader opens them, as
-the Android 14 guidance requires. Loader failures now also carry the underlying exception, so the
-next Logs entry names the real cause instead of only the wrapper.
+Both layouts are decoded now, and the real Keiyoushi index decodes to **1708 extensions** instead of
+zero. A regression test covers the wrapped and the flat layout. Repositories that still serve
+`index.min.json` / `index.json` (yuzono anime repo, custom Aniyomi repositories) are unchanged.
 
-### Interface
+### The install errors from 1.2.1
 
-* **Repositories** shows one card per manager (**Aniyomi**, **CloudStream**) with its badge, an
-  installed-count pill and its repository rows (path, host, copy, delete), ending in
-  **＋ Add Repository to …**.
-* **Available** groups installable packages under the same manager cards with
-  `name` / `version • backend • language` rows and an accent **Install** action.
+* **`APK declares neither tachiyomi.animeextension nor tachiyomi.extension`** — an extension declares
+  its ecosystem with a `<uses-feature>` tag, and Android only reports those tags when the archive is
+  parsed with `PackageManager.GET_CONFIGURATIONS`. Packages are now read with that flag, with the
+  `<meta-data>` keys and the package-name prefix as fallbacks.
+* **`Could not create plugin class loader`** — Android 14's safer dynamic code loading refuses to
+  load DEX/APK files that are writable, and both backends load packages copied into the app's data
+  directory. The extracted dex and the installed APK are now marked read-only before the class
+  loader opens them, as the Android 14 guidance requires. Loader failures now carry the underlying
+  exception too, so the next Logs entry names the real cause.
+
+If you are on 1.2.1 you are seeing those two errors: this build contains their fixes as well.
 
 ### Downloads
 
 | File | What it is |
 | --- | --- |
-| `KirokuRuntimeHost-1.2.2.apk` | The **only installable file**. The Runtime Host app: runs Animiru anime extensions, Mihon manga extensions and CloudStream `.cs3` plugins in a separate, isolated process. |
-| `bridge-sdk-1.2.2.aar` | Library for your own app. Contains `io.kiroku.runtime.bridge.ExtensionBridge` and the Binder client. Not installable. |
-| `bridge-ipc-1.2.2.aar` | Library for your own app. Shared IPC models, manga models and the AIDL service interface. Not installable — the SDK needs it next to it. |
+| `KirokuRuntimeHost-1.2.3.apk` | The **only installable file**. The Runtime Host app: runs Animiru anime extensions, Mihon manga extensions and CloudStream `.cs3` plugins in a separate, isolated process. |
+| `bridge-sdk-1.2.3.aar` | Library for your own app. Contains `io.kiroku.runtime.bridge.ExtensionBridge` and the Binder client. Not installable. |
+| `bridge-ipc-1.2.3.aar` | Library for your own app. Shared IPC models, manga models and the AIDL service interface. Not installable — the SDK needs it next to it. |
 
 ### Upgrade notes
 
-1. Install `KirokuRuntimeHost-1.2.2.apk` over 1.2.1 or earlier (same signing key).
-2. Extensions that 1.2.1 rejected were never stored, so install them again from **Available**.
-   Extensions that were stored but failed to load are picked up on the next **Refresh**.
-3. Open **Repositories** → **Load catalogue** if the lists look empty; anime repositories come from
-   `yuzono/anime-repo`, manga from `keiyoushi/extensions`, plugins from the Phisher CloudStream
-   repository, plus whatever you add.
+1. Install `KirokuRuntimeHost-1.2.3.apk` over any earlier version (same signing key).
+2. Open **Repositories** → **Load catalogue**; the manga card should now report its extensions.
+3. Reinstall anything that failed to install before.
 
 ### Known limitations
 
-* The two backend modules compile and their unit tests pass, but nothing here ran on a device or
-  emulator: on-device install and playback remain unverified.
+* The modules compile and their unit tests pass (including the real-index decode check), but nothing
+  in this release ran on a device or emulator.
 * Playback belongs to the host app: the runtime returns streams, subtitles and audio tracks only.
 
 ### Using the SDK
 
 ```kotlin
-implementation(files("libs/bridge-sdk-1.2.2.aar"))
-implementation(files("libs/bridge-ipc-1.2.2.aar"))
+implementation(files("libs/bridge-sdk-1.2.3.aar"))
+implementation(files("libs/bridge-ipc-1.2.3.aar"))
 ```
 
 Declare the package query so the SDK can find the runtime:
