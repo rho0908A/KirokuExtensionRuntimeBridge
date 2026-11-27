@@ -13,7 +13,7 @@ import java.io.File
 
 /** The two package formats the Aniyomi backend understands. */
 enum class AniyomiExtensionKind {
-    /** Aniyomi/Anikku anime extension (`tachiyomi.animeextension`, lib 12-16). */
+    /** Animiru anime extension (`tachiyomi.animeextension`, lib 14, 16, 17). */
     ANIME,
 
     /** Mihon manga extension (`tachiyomi.extension`, lib 1.4-1.6). */
@@ -21,12 +21,13 @@ enum class AniyomiExtensionKind {
 }
 
 /**
- * Reads and validates Aniyomi/Anikku anime and Mihon manga extension APKs without executing the
- * extension code.
+ * Reads and validates Animiru anime and Mihon manga extension APKs without executing the extension
+ * code.
  *
- * The contracts are taken from the maintained hosts, not from the archived Aniyomi app:
- *  - anime: Anikku `ExtensionLoader` - feature `tachiyomi.animeextension`, metadata
- *    `tachiyomi.animeextension.class` / `.factory` / `.nsfw`, lib versions 12..16.
+ * The backend keeps the `aniyomi` name, but the contracts come from the two hosts that replaced the
+ * archived Aniyomi app:
+ *  - anime: Animiru (an Aniyomi fork) `ExtensionLoader` - feature `tachiyomi.animeextension`,
+ *    metadata `tachiyomi.animeextension.class` / `.factory` / `.nsfw`, lib versions 14, 16 and 17.
  *  - manga: Mihon `ExtensionLoader` - feature `tachiyomi.extension`, metadata
  *    `tachiyomi.extension.class` / `.factory` / `.nsfw` / `.lib`, lib versions 1.4, 1.5 and 1.6.
  *
@@ -49,14 +50,14 @@ object AniyomiPackage {
 
     const val META_LANG = "tachiyomi.animeextension.lang"
 
-    /** Anikku accepts lib 12..16 (see `ExtensionLoader.LIB_VERSION_MIN/MAX`). */
-    val SUPPORTED_ANIME_LIB_VERSIONS = 12..16
+    /** Animiru's `ExtensionLoader.SUPPORTED_LIB_VERSIONS` is exactly 14, 16 and 17. */
+    val SUPPORTED_ANIME_LIB_VERSIONS = listOf(14, 16, 17)
 
     /** Mihon accepts 1.4 and 1.6; 1.5 packages use the same contract as 1.4. */
     val SUPPORTED_MANGA_LIB_VERSIONS = listOf(1.4, 1.5, 1.6)
 
     /** Backwards compatible alias used by older call sites. */
-    val SUPPORTED_LIB_VERSIONS: IntRange get() = SUPPORTED_ANIME_LIB_VERSIONS
+    val SUPPORTED_LIB_VERSIONS: List<Int> get() = SUPPORTED_ANIME_LIB_VERSIONS
 
     private const val MAX_PACKAGE_BYTES = 128L * 1024 * 1024
 
@@ -142,7 +143,7 @@ object AniyomiPackage {
 
     fun libMajor(versionName: String?): Int? = libVersion(versionName)?.substringBefore('.')?.toIntOrNull()
 
-    /** Anime lib version: an integer, compared against 12..16. */
+    /** Anime lib version: an integer, compared against 14/16/17. */
     fun animeLibVersion(info: PackageInfo): Int? = libMajor(info.versionName)
 
     /**
@@ -213,8 +214,8 @@ object AniyomiPackage {
             AniyomiExtensionKind.ANIME -> if (!isAnimeLibSupported(info)) {
                 return error(
                     ErrorCode.EXTENSION_UNSUPPORTED,
-                    "Anime extension library ${animeLibVersion(info) ?: "?"} is outside the supported range " +
-                        "${SUPPORTED_ANIME_LIB_VERSIONS.first}..${SUPPORTED_ANIME_LIB_VERSIONS.last}",
+                    "Anime extension library ${animeLibVersion(info) ?: "?"} is not one of " +
+                        SUPPORTED_ANIME_LIB_VERSIONS.joinToString(),
                     file.name,
                 )
             }
