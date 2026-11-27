@@ -61,9 +61,14 @@ object AniyomiPackage {
 
     private const val MAX_PACKAGE_BYTES = 128L * 1024 * 1024
 
+    /**
+     * `GET_CONFIGURATIONS` is what populates [PackageInfo.reqFeatures]: extension descriptors are
+     * `<uses-feature>` tags, so without it every APK looks like it declares no ecosystem at all.
+     */
     @Suppress("DEPRECATION")
     private val PACKAGE_FLAGS: Int =
-        PackageManager.GET_META_DATA or PackageManager.GET_PERMISSIONS or PackageManager.GET_SIGNATURES
+        PackageManager.GET_META_DATA or PackageManager.GET_PERMISSIONS or
+            PackageManager.GET_SIGNATURES or PackageManager.GET_CONFIGURATIONS
 
     fun packageInfo(context: Context, file: File): PackageInfo? = try {
         val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -85,11 +90,32 @@ object AniyomiPackage {
         null
     }
 
+    /**
+     * Decides which ecosystem a package belongs to.
+     *
+     * The `<uses-feature>` tag is authoritative, but it only reaches [PackageInfo.reqFeatures] when
+     * the archive is parsed with `GET_CONFIGURATIONS`, and some OEM package parsers drop it anyway.
+     * The `<meta-data>` keys and the canonical package prefix are checked as fallbacks so a valid
+     * extension is never rejected as "declares neither".
+     */
     fun kind(info: PackageInfo): AniyomiExtensionKind? {
         val features = info.reqFeatures.orEmpty().map { it.name }
+        when {
+            FEATURE_ANIME_EXTENSION in features -> return AniyomiExtensionKind.ANIME
+            FEATURE_MANGA_EXTENSION in features -> return AniyomiExtensionKind.MANGA
+        }
+
+        val meta = runCatching { info.applicationInfo?.metaData }.getOrNull()
+        val packageName = info.packageName.orEmpty()
+        val declaresAnime = meta?.containsKey(META_ANIME_CLASS) == true ||
+            meta?.containsKey(META_ANIME_FACTORY) == true ||
+            packageName.contains(".animeextension.")
+        val declaresManga = meta?.containsKey(META_MANGA_CLASS) == true ||
+            meta?.containsKey(META_MANGA_FACTORY) == true ||
+            packageName.contains(".extension.")
         return when {
-            FEATURE_ANIME_EXTENSION in features -> AniyomiExtensionKind.ANIME
-            FEATURE_MANGA_EXTENSION in features -> AniyomiExtensionKind.MANGA
+            declaresAnime -> AniyomiExtensionKind.ANIME
+            declaresManga -> AniyomiExtensionKind.MANGA
             else -> null
         }
     }
