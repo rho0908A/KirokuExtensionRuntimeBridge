@@ -104,7 +104,10 @@ internal class CloudStreamRepositoryClient(private val http: OkHttpClient) {
         onChunk: suspend (downloaded: Long, total: Long) -> Unit = { _, _ -> },
     ): File = withContext(Dispatchers.IO) {
         targetDir.mkdirs()
-        val target = File(targetDir, "${remote.id}-${remote.versionCode}.cs3.part")
+        val target = File(targetDir, "${remote.id}-${remote.versionCode}.cs3")
+        // Staging file on purpose: the plugin installer requires the ".cs3" suffix, which a partial
+        // download must not carry, so the transfer lands here and is renamed when complete.
+        val staging = File(targetDir, "${target.name}.part")
         val request = Request.Builder().url(remote.apkUrl).build()
         try {
             http.newCall(request).execute().use { response ->
@@ -118,7 +121,7 @@ internal class CloudStreamRepositoryClient(private val http: OkHttpClient) {
                 val body = response.body ?: throw BackendException("Plugin download returned no body", ErrorCode.NETWORK)
                 val total = body.contentLength()
                 var downloaded = 0L
-                target.outputStream().use { out ->
+                staging.outputStream().use { out ->
                     body.byteStream().use { input ->
                         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                         while (true) {
@@ -132,11 +135,16 @@ internal class CloudStreamRepositoryClient(private val http: OkHttpClient) {
                 }
             }
         } catch (e: BackendException) {
-            target.delete()
+            staging.delete()
             throw e
         } catch (e: IOException) {
-            target.delete()
+            staging.delete()
             throw BackendException("Plugin download failed: ${e.message}", ErrorCode.NETWORK, e, retryable = true)
+        }
+        if (target.exists()) target.delete()
+        if (!staging.renameTo(target)) {
+            staging.delete()
+            throw BackendException("Could not store the downloaded plugin", ErrorCode.STORAGE)
         }
         target
     }

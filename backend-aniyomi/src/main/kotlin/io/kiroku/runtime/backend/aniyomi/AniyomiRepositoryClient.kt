@@ -207,7 +207,10 @@ internal class AniyomiRepositoryClient(private val http: OkHttpClient) {
         onChunk: suspend (downloaded: Long, total: Long) -> Unit = { _, _ -> },
     ): Pair<File, String> = withContext(Dispatchers.IO) {
         targetDir.mkdirs()
-        val target = File(targetDir, "${remote.id}-${remote.versionCode}.apk.part")
+        val target = File(targetDir, "${remote.id}-${remote.versionCode}.apk")
+        // Downloaded into a staging file so an interrupted transfer is never handed to the installer,
+        // then renamed: the installer checks the ".apk" suffix, so the final name must keep it.
+        val staging = File(targetDir, "${target.name}.part")
         val digest = MessageDigest.getInstance("SHA-256")
 
         val request = Request.Builder().url(remote.apkUrl).build()
@@ -226,7 +229,7 @@ internal class AniyomiRepositoryClient(private val http: OkHttpClient) {
                 )
                 val total = body.contentLength()
                 var downloaded = 0L
-                target.outputStream().use { out ->
+                staging.outputStream().use { out ->
                     body.byteStream().use { input ->
                         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                         while (true) {
@@ -244,10 +247,10 @@ internal class AniyomiRepositoryClient(private val http: OkHttpClient) {
                 }
             }
         } catch (e: BackendException) {
-            target.delete()
+            staging.delete()
             throw e
         } catch (e: IOException) {
-            target.delete()
+            staging.delete()
             throw BackendException(
                 "Download of ${remote.id} failed: ${e.message}",
                 ErrorCode.NETWORK,
@@ -256,6 +259,14 @@ internal class AniyomiRepositoryClient(private val http: OkHttpClient) {
             )
         }
 
+        if (target.exists()) target.delete()
+        if (!staging.renameTo(target)) {
+            staging.delete()
+            throw BackendException(
+                "Could not store the downloaded extension for ${remote.id}",
+                ErrorCode.STORAGE,
+            )
+        }
         val sha = digest.digest().joinToString("") { "%02x".format(it) }
         target to sha
     }
