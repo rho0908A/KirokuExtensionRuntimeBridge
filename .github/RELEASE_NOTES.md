@@ -1,62 +1,59 @@
-## Kiroku Runtime Bridge 1.2.0
+## Kiroku Runtime Bridge 1.2.1
 
-Anime extensions install **and load** now. This release ports the anime API to Animiru's
-`extensions-lib` v17 surface, fixes adding `repo.json` repositories, and keeps extensions whose
-code fails to instantiate instead of deleting them.
+Installing extensions works again, and both the repository screen and the extension list now look
+like a proper extension manager.
 
-### Why anime extensions disappeared before
+### Why installs failed in 1.2.0
 
-Anime APKs link their host API by exact JVM class name — `eu/kanade/tachiyomi/network/RequestsKt`,
-`OkHttpExtensionsKt`, `util/JsoupExtensionsKt`, `util/JsonExtensionsKt`, `NetworkHelper`, and the
-`animesource/model` types. This runtime had the same helpers under a different class name
-(`NetworkKt`), so `install` succeeded, `load` threw `NoClassDefFoundError`, the APK was deleted and
-the Installed tab stayed empty. The helpers now live under the names the extensions reference.
+Every repository download was written to disk as `<id>-<version>.apk.part` (CloudStream:
+`.cs3.part`) and then handed straight to the installer. The installers look at the file name and
+reject anything that does not end in `.apk` or `.cs3`, so a perfectly good download was refused
+with *Extensions are APK packages* or *CloudStream plugins use the .cs3 extension*.
 
-### Highlights
+Downloads are now staged as `.part` and renamed to the real extension once the transfer completes
+(a failed transfer deletes the staging file). The installer suffix checks are unchanged: the file
+really is an APK/CS3 by then.
 
-* **Anime API ported to Animiru (`animiruorg/Animiru`) `extensions-lib` v17** — the versions
-  Animiru itself accepts (14, 16, 17), with the RxJava `fetch*` fallbacks kept so lib-14 packages
-  still work. The backend keeps the `aniyomi` name; the anime layer follows Animiru and the manga
-  layer follows Mihon.
-* **`repo.json` repositories work.** Adding a repository by its descriptor URL used to fail with
-  *does not declare an index* (Aniyomi) or *Element … is not a JsonArray* (CloudStream). The
-  Aniyomi client now reads the descriptor, follows `index_v2`, keeps the legacy JSON array path and
-  falls back to a sibling `index.min.json`; the CloudStream client follows
-  `pluginLists`/`pluginList` and falls back to `plugins.json`.
-* **Failed loads keep the APK.** A package that installs but cannot be instantiated stays listed
-  with its error instead of being silently removed, so the Logs screen explains what happened.
-* **Anime source language** is read from `AnimeCatalogueSource`, matching v17.
-* **`kotlin-reflect` stays pinned** to the project's Kotlin version (the 1.1.0 startup crash).
+### Interface
+
+* **Repositories** is a per-manager list: a card for **Aniyomi** and one for **CloudStream**, each
+  with its badge, an installed-count pill, and its repository rows showing path and host with
+  **copy** and **delete** actions. Each card ends with **＋ Add Repository to …**, which opens a
+  dialog for that manager only.
+* **Available** groups installable packages under the same manager cards, with `name` /
+  `version • backend • language` rows and an accent **Install** action (plus **Update** and
+  **Installed** states). Both screens share one styling source, so the two managers render
+  identically.
 
 ### Downloads
 
 | File | What it is |
 | --- | --- |
-| `KirokuRuntimeHost-1.2.0.apk` | The **only installable file**. The Runtime Host app: runs Animiru anime extensions, Mihon manga extensions and CloudStream `.cs3` plugins in a separate, isolated process. |
-| `bridge-sdk-1.2.0.aar` | Library for your own app. Contains `io.kiroku.runtime.bridge.ExtensionBridge` and the Binder client. Not installable. |
-| `bridge-ipc-1.2.0.aar` | Library for your own app. Shared IPC models, manga models and the AIDL service interface. Not installable — the SDK needs it next to it. |
+| `KirokuRuntimeHost-1.2.1.apk` | The **only installable file**. The Runtime Host app: runs Animiru anime extensions, Mihon manga extensions and CloudStream `.cs3` plugins in a separate, isolated process. |
+| `bridge-sdk-1.2.1.aar` | Library for your own app. Contains `io.kiroku.runtime.bridge.ExtensionBridge` and the Binder client. Not installable. |
+| `bridge-ipc-1.2.1.aar` | Library for your own app. Shared IPC models, manga models and the AIDL service interface. Not installable — the SDK needs it next to it. |
 
 ### Upgrade notes
 
-1. Install `KirokuRuntimeHost-1.2.0.apk` over any earlier version (same signing key).
+1. Install `KirokuRuntimeHost-1.2.1.apk` over any earlier version (same signing key).
 2. Open **Repositories**, then **Load catalogue**. Anime repositories are listed from
    `keiyoushi/extensions` (manga, `index.pb`) and `recloudstream/cloudstream` (plugins), plus any
-   anime repository you add — `https://raw.githubusercontent.com/yuzono/anime-repo/repo/index.min.json`
+   repository you add — `https://raw.githubusercontent.com/yuzono/anime-repo/repo/index.min.json`
    is a good one.
-3. Install an extension from **Available**, then switch to **Installed** — it should appear with its
-   sources. If it does not, **Logs** now reports the reason instead of dropping the package.
+3. Install an extension from **Available**; it now completes instead of failing on the file
+   extension. Switch to **Installed** to see it with its sources.
 
 ### Known limitations
 
-* Nothing in this release has been verified on a device or emulator; the build is green and the
-  APIs match the ones the extensions actually call, but treat runtime behaviour as unverified.
+* Nothing in this release has been verified on a device or emulator; the build is green and the two
+  repository clients are covered by unit tests, but treat on-device behaviour as unverified.
 * Playback belongs to the host app: the runtime returns streams, subtitles and audio tracks only.
 
 ### Using the SDK
 
 ```kotlin
-implementation(files("libs/bridge-sdk-1.2.0.aar"))
-implementation(files("libs/bridge-ipc-1.2.0.aar"))
+implementation(files("libs/bridge-sdk-1.2.1.aar"))
+implementation(files("libs/bridge-ipc-1.2.1.aar"))
 ```
 
 Declare the package query so the SDK can find the runtime:
@@ -65,4 +62,3 @@ Declare the package query so the SDK can find the runtime:
 <queries>
     <package android:name="io.kiroku.runtime.host" />
 </queries>
-```
