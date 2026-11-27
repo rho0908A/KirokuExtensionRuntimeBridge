@@ -22,8 +22,8 @@ The bridge is independent of Kiroku (or any other player). Kiroku is simply the 
 | `bridge-ipc` | AAR | AIDL contract, protocol constants, unified models |
 | `bridge-sdk` | AAR | Public SDK: `connect`, `getExtensions`, `search`, `getDetails`, `getEpisodes`, `extractStreams`, events, reconnect |
 | `backend-api` | AAR | `ExtensionBackend` abstraction shared by ecosystems |
-| `aniyomi-api` | AAR | Host-side API surface: Anikku `animesource` (lib 12–16) + Mihon `source` (lib 1.4–1.6) |
-| `backend-aniyomi` | AAR | Loads Aniyomi/Anikku anime and Mihon manga APK extensions, executes both |
+| `aniyomi-api` | AAR | Host-side API surface: Animiru `animesource` (lib 14, 16, 17) + Mihon `source` (lib 1.4–1.6) |
+| `backend-aniyomi` | AAR | Loads Animiru anime and Mihon manga APK extensions, executes both |
 | `backend-cloudstream` | AAR | Loads `.cs3` plugins against the CloudStream 4.9.1 library |
 | `runtime-host` | APK | The runtime service + Extension Manager UI |
 | `sample-host` | APK | Reference integration using only the SDK |
@@ -31,19 +31,26 @@ The bridge is independent of Kiroku (or any other player). Kiroku is simply the 
 Everything is Kotlin + Gradle Kotlin DSL + native Android APIs. There is no Dart, React Native,
 Node, Python or web runtime anywhere in this project.
 
-## What's new in 1.1.1
+## What's new in 1.2.0
 
-* **Fixed the 1.1.0 startup crash.** That build packaged `kotlin-reflect` 2.4.0 next to a 2.2.20
-  stdlib, so the Host died with `NoClassDefFoundError: kotlin/jvm/internal/KotlinGenericDeclaration`
-  before the first screen. Every Kotlin runtime artifact is now pinned to the project's Kotlin
-  version in the root `build.gradle.kts`.
-* **Manga extensions.** Mihon manga APKs (`tachiyomi.extension`, lib 1.4–1.6) load and execute next to
-  the anime ones, and the SDK gained `searchManga`, `popularManga`, `latestManga`, `getMangaDetails`,
-  `getChapters` and `getPages`.
-* **Anime layer retargeted to Anikku** (`komikku-app/anikku`, extensions-lib 12–16) instead of the
-  archived Aniyomi app. The backend keeps the `aniyomi` name, so host integrations do not change.
-* **Real repository indexes.** `repo.json` → `index_v2` → gzipped `index.pb` is decoded, so
-  Keiyoushi's catalogue lists real manga extensions instead of the two placeholder entries that
+* **Anime extensions now load.** Anime packages link the host's API by exact JVM class name, and the
+  classes they call (`RequestsKt`, `OkHttpExtensionsKt`, `JsoupExtensionsKt`, `JsonExtensionsKt`,
+  `NetworkHelper`, the `animesource.model` types) lived under different names here, so every install
+  ended with the APK deleted and nothing in the Installed list. The anime API has been ported to
+  Animiru's `extensions-lib` **v17** surface — the classes and signatures those APKs actually
+  reference — with the RxJava `fetch*` fallbacks kept so lib-14 and lib-16 packages still work.
+* **Anime layer retargeted to Animiru** (`animiruorg/Animiru`, lib 14/16/17) — the maintained
+  Aniyomi fork — instead of the archived Aniyomi app or Anikku. The backend keeps the `aniyomi`
+  name, so host integrations do not change.
+* **Adding `repo.json` works.** The Aniyomi client used to demand `index_v2` in whatever document it
+  fetched and the CloudStream client parsed `repo.json` as a plugin array, so a repository added by
+  its descriptor URL failed with *does not declare an index* / *Element … is not a JsonArray*. Both
+  now read the descriptor, follow `pluginLists`/`pluginList`/`index_v2`, and fall back to the
+  sibling `index.min.json` or `plugins.json`.
+* **Failed loads keep the extension.** A package that installs but cannot be instantiated is now
+  kept and reported as a failed extension with a reason, instead of being deleted silently.
+* **Repository indexes.** `repo.json` → `index_v2` → gzipped `index.pb` is decoded, so Keiyoushi's
+  catalogue lists real manga extensions instead of the two placeholder entries that
   `index.min.json` now contains.
 
 ## Status (read this before trusting it)
@@ -51,7 +58,7 @@ Node, Python or web runtime anywhere in this project.
 * **Builds are green.** The `Android` workflow runs `gradle test` and assembles
   `:runtime-host:assembleDebug`, `:sample-host:assembleDebug`, `:bridge-sdk:assembleRelease` and
   `:bridge-ipc:assembleRelease` on every push to `main`. The installable APK and the two SDK
-  libraries for the current version (`1.1.1`) are attached to
+  libraries for the current version (`1.2.0`) are attached to
   [Releases](https://github.com/rho0908A/KirokuExtensionRuntimeBridge/releases); debug builds and the
   sample client are on the run page under **Artifacts → `kiroku-runtime-bridge`**.
 * **Runtime behaviour is not verified on hardware.** No device or emulator test has been run:
@@ -62,14 +69,15 @@ Node, Python or web runtime anywhere in this project.
   disables that metadata check (`android.experimental.disableCompileSdkChecks`); it binds only to
   stable JVM-level CloudStream classes.
 * **Anime and manga extension APKs are both supported by the Aniyomi backend.** Anime packages run
-  against Anikku's `animesource` API (extensions-lib 12–16) and manga packages against Mihon's
-  `source` API (extensions-lib 1.4–1.6). The archived Aniyomi app is no longer the reference: the
-  anime layer follows Anikku, the manga layer follows Mihon, and the backend keeps the `aniyomi`
-  name so host integrations do not have to change.
+  against Animiru's `animesource` API (extensions-lib 14, 16 and 17 — exactly the versions Animiru's
+  `ExtensionLoader` accepts) and manga packages against Mihon's `source` API (extensions-lib
+  1.4–1.6). The archived Aniyomi app is no longer the reference: the anime layer follows Animiru,
+  the manga layer follows Mihon, and the backend keeps the `aniyomi` name so host integrations do
+  not have to change.
 * **Repository indexes:** Keiyoushi's `index.min.json` is now only a two-entry "update your app"
   placeholder. The runtime follows `repo.json` → `index_v2` and decodes the gzipped `index.pb`
-  protobuf index, so real manga extensions are listed; legacy Aniyomi `index.min.json` anime
-  repositories still work the same way.
+  protobuf index, so real manga extensions are listed; legacy anime repositories with a plain
+  `index.min.json` array still work the same way.
 
 ## Quick start (build from source)
 
@@ -89,11 +97,11 @@ adb install -r sample-host/build/outputs/apk/debug/sample-host-debug.apk
 Both debug builds share one Gradle debug keystore, so the sample is accepted by the runtime without
 any setup. If you have no local Android SDK, push to `main` and use the downloaded CI artifacts.
 
-The Runtime Host ships with two real repositories enabled:
+The Runtime Host ships with three real repositories enabled:
 
-* `yuzono/anime-repo` — Aniyomi/Anikku anime extensions (API 12–16)
+* `yuzono/anime-repo` — Animiru/Aniyomi anime extensions (`index.min.json`)
 * `keiyoushi/extensions` — Mihon manga extensions (`repo.json` → `index_v2`, lib 1.6)
-* `phisher98/cloudstream-extensions-phisher` — prebuilt CloudStream `.cs3` plugins
+* `recloudstream/cloudstream` — CloudStream repository (`repo.json` → `plugins.json`)
 
 ## Use it in your app
 
@@ -111,7 +119,7 @@ separate package). It must be installed and the user must launch it once.
 ### 2. Add the SDK to your app
 
 The release page publishes both libraries with the release version in their names, so the fastest
-path is to download `bridge-sdk-1.1.1.aar` and `bridge-ipc-1.1.1.aar` into `app/libs/`. To build them
+path is to download `bridge-sdk-1.2.0.aar` and `bridge-ipc-1.2.0.aar` into `app/libs/`. To build them
 yourself instead:
 
 ```bash
@@ -134,8 +142,8 @@ android {
 
 dependencies {
     // names as published on the release page; rename if you built the AARs yourself
-    implementation(files("libs/bridge-sdk-1.1.1.aar"))
-    implementation(files("libs/bridge-ipc-1.1.1.aar"))
+    implementation(files("libs/bridge-sdk-1.2.0.aar"))
+    implementation(files("libs/bridge-ipc-1.2.0.aar"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }
 ```
@@ -259,10 +267,13 @@ Repositories are managed from the app too:
 
 ```kotlin
 bridge.addRepository("https://raw.githubusercontent.com/yuzono/anime-repo/repo/index.min.json",
-                     BackendType.ANIYOMI, name = "Aniyomi extensions")
+                     BackendType.ANIYOMI, name = "Animiru anime extensions")
 bridge.getRepositories().forEach { println("${it.name} enabled=${it.enabled}") }
 bridge.removeRepository(repositoryId)
 ```
+
+A directory URL, a `repo.json` URL or an `index.min.json` URL all work for the Aniyomi backend; the
+client picks the matching document itself.
 
 ### 8. Observe state and progress
 
@@ -351,5 +362,5 @@ log. It uses only the public SDK — copy it as the starting point.
 
 ## License
 
-Apache-2.0. Aniyomi and CloudStream remain the property of their respective authors; this project
-ships no extension code and no content.
+Apache-2.0. Aniyomi, Animiru and CloudStream remain the property of their respective authors; this
+project ships no extension code and no content.

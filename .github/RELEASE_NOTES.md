@@ -1,77 +1,68 @@
-## Kiroku Runtime Bridge 1.1.1
+## Kiroku Runtime Bridge 1.2.0
 
-### Fixed
+Anime extensions install **and load** now. This release ports the anime API to Animiru's
+`extensions-lib` v17 surface, fixes adding `repo.json` repositories, and keeps extensions whose
+code fails to instantiate instead of deleting them.
 
-* **Startup crash on 1.1.0 (`NoClassDefFoundError: kotlin/jvm/internal/KotlinGenericDeclaration`).**
-  The APK packaged `kotlin-reflect` 2.4.0 from the CloudStream library next to a 2.2.20 Kotlin stdlib.
-  Reflect 2.4 implements interfaces that only exist in its own stdlib, so the Host crashed while
-  creating the first ViewModel. All Kotlin runtime artifacts are now pinned to one version.
+### Why anime extensions disappeared before
 
-### Features
+Anime APKs link their host API by exact JVM class name — `eu/kanade/tachiyomi/network/RequestsKt`,
+`OkHttpExtensionsKt`, `util/JsoupExtensionsKt`, `util/JsonExtensionsKt`, `NetworkHelper`, and the
+`animesource/model` types. This runtime had the same helpers under a different class name
+(`NetworkKt`), so `install` succeeded, `load` threw `NoClassDefFoundError`, the APK was deleted and
+the Installed tab stayed empty. The helpers now live under the names the extensions reference.
 
-* **Manga extensions.** Mihon manga extension APKs (`tachiyomi.extension`, extensions-lib 1.4–1.6)
-  load and execute in the same runtime as the anime ones. The SDK gained `searchManga`,
-  `popularManga`, `latestManga`, `getMangaDetails`, `getChapters` and `getPages`; manga sources
-  advertise themselves with `capabilities.manga`.
-* **Anime layer retargeted to Anikku.** Anime extensions now run against Anikku's `animesource` API
-  (extensions-lib 12–16) instead of the archived Aniyomi app. The backend keeps the `aniyomi` name,
-  so existing host integrations do not change.
-* **Real repository indexes.** Keiyoushi's `index.min.json` is now a two-entry placeholder; the runtime
-  follows `repo.json` → `index_v2` and decodes the gzipped `index.pb` protobuf index, so the catalogue
-  lists real extensions. Legacy Aniyomi `index.min.json` anime repositories keep working.
-* The first 1.0.1 build failed its unit tests; that is fixed here, and `main` builds green again.
+### Highlights
 
-### Assets
+* **Anime API ported to Animiru (`animiruorg/Animiru`) `extensions-lib` v17** — the versions
+  Animiru itself accepts (14, 16, 17), with the RxJava `fetch*` fallbacks kept so lib-14 packages
+  still work. The backend keeps the `aniyomi` name; the anime layer follows Animiru and the manga
+  layer follows Mihon.
+* **`repo.json` repositories work.** Adding a repository by its descriptor URL used to fail with
+  *does not declare an index* (Aniyomi) or *Element … is not a JsonArray* (CloudStream). The
+  Aniyomi client now reads the descriptor, follows `index_v2`, keeps the legacy JSON array path and
+  falls back to a sibling `index.min.json`; the CloudStream client follows
+  `pluginLists`/`pluginList` and falls back to `plugins.json`.
+* **Failed loads keep the APK.** A package that installs but cannot be instantiated stays listed
+  with its error instead of being silently removed, so the Logs screen explains what happened.
+* **Anime source language** is read from `AnimeCatalogueSource`, matching v17.
+* **`kotlin-reflect` stays pinned** to the project's Kotlin version (the 1.1.0 startup crash).
 
-| Asset | What it is |
+### Downloads
+
+| File | What it is |
 | --- | --- |
-| `KirokuRuntimeHost-1.1.1.apk` | The **only installable file**. The Runtime Host app: runs Aniyomi/Anikku anime extensions, Mihon manga extensions and CloudStream `.cs3` plugins in a separate, isolated process. |
-| `bridge-sdk-1.1.1.aar` | Library for your own app. Contains `io.kiroku.runtime.bridge.ExtensionBridge` and the Binder client. Not installable. |
-| `bridge-ipc-1.1.1.aar` | Library for your own app. Shared IPC models, manga models and the AIDL service interface. Not installable — the SDK needs it next to it. |
+| `KirokuRuntimeHost-1.2.0.apk` | The **only installable file**. The Runtime Host app: runs Animiru anime extensions, Mihon manga extensions and CloudStream `.cs3` plugins in a separate, isolated process. |
+| `bridge-sdk-1.2.0.aar` | Library for your own app. Contains `io.kiroku.runtime.bridge.ExtensionBridge` and the Binder client. Not installable. |
+| `bridge-ipc-1.2.0.aar` | Library for your own app. Shared IPC models, manga models and the AIDL service interface. Not installable — the SDK needs it next to it. |
 
-The AARs are the "SDK" side of the project. An APK is an app you install; an AAR is compiled library
-code you reference from an app you build yourself. If you only want to use the Runtime Host, download
-the APK and ignore the two `.aar` files.
+### Upgrade notes
 
-Debug builds and the sample client are not published here — they are available under
-**Actions → Android → artifacts** of each run.
+1. Install `KirokuRuntimeHost-1.2.0.apk` over any earlier version (same signing key).
+2. Open **Repositories**, then **Load catalogue**. Anime repositories are listed from
+   `keiyoushi/extensions` (manga, `index.pb`) and `recloudstream/cloudstream` (plugins), plus any
+   anime repository you add — `https://raw.githubusercontent.com/yuzono/anime-repo/repo/index.min.json`
+   is a good one.
+3. Install an extension from **Available**, then switch to **Installed** — it should appear with its
+   sources. If it does not, **Logs** now reports the reason instead of dropping the package.
 
-### Install
+### Known limitations
 
-1. Install `KirokuRuntimeHost-1.1.1.apk` on an Android 8.0+ (API 26) device.
-2. Open the Runtime Host, go to **Repositories** and load the catalogue, then install Aniyomi/Anikku
-   anime extensions or Mihon manga extensions from it (or use **Extensions → Load extension APK** for
-   a file you already have).
+* Nothing in this release has been verified on a device or emulator; the build is green and the
+  APIs match the ones the extensions actually call, but treat runtime behaviour as unverified.
+* Playback belongs to the host app: the runtime returns streams, subtitles and audio tracks only.
 
-The APK is signed with the standard debug keystore so it installs without extra setup. It is not
-Play-Store distributable: rebuild with your own keystore before distributing.
-
-### Use the SDK in your app
-
-Put both AARs into your app's `libs/` folder:
+### Using the SDK
 
 ```kotlin
-dependencies {
-    implementation(files("libs/bridge-sdk-1.1.1.aar"))
-    implementation(files("libs/bridge-ipc-1.1.1.aar"))
-}
+implementation(files("libs/bridge-sdk-1.2.0.aar"))
+implementation(files("libs/bridge-ipc-1.2.0.aar"))
 ```
 
-The client also needs a package visibility entry, because it binds to a service in another app:
+Declare the package query so the SDK can find the runtime:
 
 ```xml
 <queries>
     <package android:name="io.kiroku.runtime.host" />
 </queries>
 ```
-
-Then `connect()`, call `search`/`getDetails`/`extractStreams` for anime or
-`searchManga`/`getChapters`/`getPages` for manga, and collect `BridgeEvent`s for state changes.
-`README.md` and `docs/sdk-integration.md` describe the full flow, `docs/api-reference.md` lists every
-call and model.
-
-### Limitations
-
-Extension loading, playback and the Binder round trip compile and pass unit tests, but have not been
-verified on a physical device in this environment. See `docs/troubleshooting.md` for the device
-verification checklist.
