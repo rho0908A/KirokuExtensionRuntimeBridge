@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
@@ -30,53 +31,71 @@ import okhttp3.Request
  *
  * Both formats have changed between CloudStream versions, so parsing is intentionally lenient:
  * unknown keys are ignored and missing keys degrade to sensible defaults instead of failing the
- * whole repository.
+ * whole repository. Either document can be added in the UI: an array of plugins, a `repo.json`
+ * descriptor (`pluginLists`/`pluginList`), or a directory URL.
  */
 internal class CloudStreamRepositoryClient(private val http: OkHttpClient) {
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
     suspend fun fetch(repository: ExtensionRepository): List<RepositoryExtension> = withContext(Dispatchers.IO) {
-        val base = repository.url.trimEnd('/')
-        val pluginLists = if (base.endsWith(".json")) {
-            listOf(base)
-        } else {
-            val repoJson = getOrNull("$base/repo.json")
-            if (repoJson != null) {
-                runCatching {
-                    json.parseToJsonElement(repoJson).jsonObject["pluginLists"]?.jsonArray
-                        ?.mapNotNull { it.jsonPrimitive.contentOrNull }
-                        ?.map { resolve(base, it) }
-                }.getOrNull().orEmpty().ifEmpty { listOf("$base/plugins.json") }
-            } else {
-                listOf("$base/plugins.json")
-            }
-        }
-
+        val url = repository.url.trimEnd('/')
+        // `repo.json` may be given directly (the common case, it is what the settings hint asks for)
+        // or implied by a directory URL.
+        val documentUrl = if (url.endsWith(".json")) url else "$url/repo.json"
         val result = mutableListOf<RepositoryExtension>()
         var lastError: Exception? = null
 
-        for (listUrl in pluginLists) {
+        suspend fun readDocument(listUrl: String) {
             try {
-                val body = get(listUrl)
-                val array = json.parseToJsonElement(body).jsonArray
-                array.forEach { element ->
-                    (element as? JsonObject)?.toRepositoryExtension(repository, base)?.let(result::add)
+                when (val element = json.parseToJsonElement(get(listUrl))) {
+                    is JsonArray -> element.forEach { entry ->
+                        (entry as? JsonObject)
+                            ?.toRepositoryExtension(repository, listUrl.substringBeforeLast('/'))
+                            ?.let(result::add)
+                    }
+
+                    is JsonObject -> {
+                        val lists = element["pluginLists"]?.asUrlList()
+                            ?: element["pluginList"]?.asUrlList()
+                        when {
+                            !lists.isNullOrEmpty() -> lists.forEach { readDocument(resolve(listUrl.substringBeforeLast('/'), it)) }
+                            else -> element["plugins"]?.let { it as? JsonArray }?.forEach { entry ->
+                                (entry as? JsonObject)
+                                    ?.toRepositoryExtension(repository, listUrl.substringBeforeLast('/'))
+                                    ?.let(result::add)
+                            }
+                        }
+                    }
+
+                    else -> Unit
                 }
             } catch (e: Exception) {
                 lastError = e
             }
         }
 
+        readDocument(documentUrl)
+
+        // Directory URL whose repo.json is missing: fall back to the classic plugins.json.
+        if (result.isEmpty() && !url.endsWith(".json")) {
+            readDocument("$url/plugins.json")
+        }
+
         if (result.isEmpty() && lastError != null) {
             throw BackendException(
-                "CloudStream repository ${repository.name} could not be read: ${lastError.message}",
+                "CloudStream repository ${repository.name} could not be read: ${lastError?.message}",
                 ErrorCode.REPOSITORY_UNREACHABLE,
                 lastError,
                 retryable = true,
             )
         }
         result.distinctBy { it.id }
+    }
+
+    private fun JsonElement?.asUrlList(): List<String>? {
+        val array = this as? JsonArray ?: return null
+        return array.mapNotNull { it.jsonPrimitive.contentOrNull?.takeIf(String::isNotBlank) }
     }
 
     suspend fun download(
