@@ -1,59 +1,61 @@
-## Kiroku Runtime Bridge 1.2.1
+## Kiroku Runtime Bridge 1.2.2
 
-Installing extensions works again, and both the repository screen and the extension list now look
-like a proper extension manager.
+Installs now go through on Android 14 and later, and anime extensions are recognised instead of
+being rejected before they are even loaded.
 
-### Why installs failed in 1.2.0
+### What the two errors in 1.2.1 were
 
-Every repository download was written to disk as `<id>-<version>.apk.part` (CloudStream:
-`.cs3.part`) and then handed straight to the installer. The installers look at the file name and
-reject anything that does not end in `.apk` or `.cs3`, so a perfectly good download was refused
-with *Extensions are APK packages* or *CloudStream plugins use the .cs3 extension*.
+**`APK declares neither tachiyomi.animeextension nor tachiyomi.extension`** — an extension declares
+its ecosystem with a `<uses-feature>` tag, and Android only reports those tags through
+`PackageInfo.reqFeatures` when the APK is parsed with `PackageManager.GET_CONFIGURATIONS`. The
+runtime did not ask for them, so every package looked like it belonged to no ecosystem and was
+refused. Packages are now parsed with that flag, and the `<meta-data>` keys and the canonical
+package prefix are checked as fallbacks (that flag is also what OEM parsers are least reliable
+about).
 
-Downloads are now staged as `.part` and renamed to the real extension once the transfer completes
-(a failed transfer deletes the staging file). The installer suffix checks are unchanged: the file
-really is an APK/CS3 by then.
+**`Could not create plugin class loader`** — this was Android 14's safer dynamic code loading. For
+apps targeting API 34, ART refuses to load a DEX/JAR/APK that is writable, and both backends load
+code from files they copy into the app's own data directory, which is writable by default. The
+extracted dex and the installed APK are now marked read-only before the class loader opens them, as
+the Android 14 guidance requires. Loader failures now also carry the underlying exception, so the
+next Logs entry names the real cause instead of only the wrapper.
 
 ### Interface
 
-* **Repositories** is a per-manager list: a card for **Aniyomi** and one for **CloudStream**, each
-  with its badge, an installed-count pill, and its repository rows showing path and host with
-  **copy** and **delete** actions. Each card ends with **＋ Add Repository to …**, which opens a
-  dialog for that manager only.
-* **Available** groups installable packages under the same manager cards, with `name` /
-  `version • backend • language` rows and an accent **Install** action (plus **Update** and
-  **Installed** states). Both screens share one styling source, so the two managers render
-  identically.
+* **Repositories** shows one card per manager (**Aniyomi**, **CloudStream**) with its badge, an
+  installed-count pill and its repository rows (path, host, copy, delete), ending in
+  **＋ Add Repository to …**.
+* **Available** groups installable packages under the same manager cards with
+  `name` / `version • backend • language` rows and an accent **Install** action.
 
 ### Downloads
 
 | File | What it is |
 | --- | --- |
-| `KirokuRuntimeHost-1.2.1.apk` | The **only installable file**. The Runtime Host app: runs Animiru anime extensions, Mihon manga extensions and CloudStream `.cs3` plugins in a separate, isolated process. |
-| `bridge-sdk-1.2.1.aar` | Library for your own app. Contains `io.kiroku.runtime.bridge.ExtensionBridge` and the Binder client. Not installable. |
-| `bridge-ipc-1.2.1.aar` | Library for your own app. Shared IPC models, manga models and the AIDL service interface. Not installable — the SDK needs it next to it. |
+| `KirokuRuntimeHost-1.2.2.apk` | The **only installable file**. The Runtime Host app: runs Animiru anime extensions, Mihon manga extensions and CloudStream `.cs3` plugins in a separate, isolated process. |
+| `bridge-sdk-1.2.2.aar` | Library for your own app. Contains `io.kiroku.runtime.bridge.ExtensionBridge` and the Binder client. Not installable. |
+| `bridge-ipc-1.2.2.aar` | Library for your own app. Shared IPC models, manga models and the AIDL service interface. Not installable — the SDK needs it next to it. |
 
 ### Upgrade notes
 
-1. Install `KirokuRuntimeHost-1.2.1.apk` over any earlier version (same signing key).
-2. Open **Repositories**, then **Load catalogue**. Anime repositories are listed from
-   `keiyoushi/extensions` (manga, `index.pb`) and `recloudstream/cloudstream` (plugins), plus any
-   repository you add — `https://raw.githubusercontent.com/yuzono/anime-repo/repo/index.min.json`
-   is a good one.
-3. Install an extension from **Available**; it now completes instead of failing on the file
-   extension. Switch to **Installed** to see it with its sources.
+1. Install `KirokuRuntimeHost-1.2.2.apk` over 1.2.1 or earlier (same signing key).
+2. Extensions that 1.2.1 rejected were never stored, so install them again from **Available**.
+   Extensions that were stored but failed to load are picked up on the next **Refresh**.
+3. Open **Repositories** → **Load catalogue** if the lists look empty; anime repositories come from
+   `yuzono/anime-repo`, manga from `keiyoushi/extensions`, plugins from the Phisher CloudStream
+   repository, plus whatever you add.
 
 ### Known limitations
 
-* Nothing in this release has been verified on a device or emulator; the build is green and the two
-  repository clients are covered by unit tests, but treat on-device behaviour as unverified.
+* The two backend modules compile and their unit tests pass, but nothing here ran on a device or
+  emulator: on-device install and playback remain unverified.
 * Playback belongs to the host app: the runtime returns streams, subtitles and audio tracks only.
 
 ### Using the SDK
 
 ```kotlin
-implementation(files("libs/bridge-sdk-1.2.1.aar"))
-implementation(files("libs/bridge-ipc-1.2.1.aar"))
+implementation(files("libs/bridge-sdk-1.2.2.aar"))
+implementation(files("libs/bridge-ipc-1.2.2.aar"))
 ```
 
 Declare the package query so the SDK can find the runtime:
