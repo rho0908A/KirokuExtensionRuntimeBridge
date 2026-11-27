@@ -182,6 +182,10 @@ internal class AniyomiExtensionLoader(private val context: Context) {
     )
 
     private fun createClassLoader(file: File): ClassLoader {
+        // From Android 14 (API 34) ART refuses to load code from a writable file, and extensions are
+        // copied into the app's own data directory, which is writable. Re-label the APK before the
+        // loader opens it, otherwise loading throws "Writable dex file ... is not allowed".
+        markReadOnly(file)
         val attempts = listOf<() -> ClassLoader>(
             { ChildFirstPathClassLoader(file.absolutePath, null, parent) },
             { PathClassLoader(file.absolutePath, null, parent) },
@@ -195,10 +199,19 @@ internal class AniyomiExtensionLoader(private val context: Context) {
             }
         }
         throw BackendException(
-            "Could not create a class loader for ${file.name}",
+            "Could not create a class loader for ${file.name}" +
+                (last?.let { ": ${it.javaClass.simpleName}: ${it.message}" } ?: ""),
             ErrorCode.EXTENSION_LOAD_FAILED,
             last,
         )
+    }
+
+    /** Marks a dynamically loaded package read-only; returns false when the platform refuses. */
+    private fun markReadOnly(file: File): Boolean {
+        if (!file.canWrite()) return true
+        val marked = runCatching { file.setReadOnly() }.getOrDefault(false)
+        if (!marked) Log.w(TAG, "Could not mark ${file.name} read-only before loading it")
+        return marked
     }
 
     private fun instantiateAnime(className: String, classLoader: ClassLoader, packageName: String): List<AnimeSource> = try {

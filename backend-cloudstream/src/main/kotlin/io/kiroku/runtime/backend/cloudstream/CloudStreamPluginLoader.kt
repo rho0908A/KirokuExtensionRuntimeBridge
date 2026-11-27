@@ -65,10 +65,22 @@ internal class CloudStreamPluginLoader(private val context: Context) {
         }
 
         val optimized = File(context.codeCacheDir, "cloudstream/$pluginId").apply { mkdirs() }
+
+        // From Android 14 (API 34) ART refuses to load code from a writable file. The dex is written
+        // by the extraction step into the app's own data directory, so it is writable by default:
+        // re-label it before the class loader opens it.
+        if (extraction.dexFile.canWrite() && !runCatching { extraction.dexFile.setReadOnly() }.getOrDefault(false)) {
+            Log.w(TAG, "Could not mark ${extraction.dexFile.name} read-only before loading it")
+        }
+
         val loader = try {
             DexClassLoader(extraction.dexFile.absolutePath, optimized.absolutePath, null, parent)
         } catch (e: Throwable) {
-            throw BackendException("Could not create plugin class loader", ErrorCode.EXTENSION_LOAD_FAILED, e)
+            throw BackendException(
+                "Could not create plugin class loader: ${e.javaClass.simpleName}: ${e.message}",
+                ErrorCode.EXTENSION_LOAD_FAILED,
+                e,
+            )
         }
 
         val before = APIHolder.apis.toList()
@@ -93,7 +105,7 @@ internal class CloudStreamPluginLoader(private val context: Context) {
         try {
             plugin.load()
         } catch (e: Throwable) {
-            Log.e(TAG, "Plugin ${pluginId} failed to load", e)
+            Log.e(TAG, "Plugin $pluginId failed to load", e)
             throw BackendException(
                 "Plugin ${extraction.manifest.name} failed during load(): ${e.message}",
                 ErrorCode.EXTENSION_LOAD_FAILED,
