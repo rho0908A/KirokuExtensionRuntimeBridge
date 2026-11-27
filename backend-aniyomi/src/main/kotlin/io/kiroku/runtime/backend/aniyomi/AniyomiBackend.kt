@@ -57,7 +57,7 @@ import okhttp3.OkHttpClient
  *
  * The backend is named after Aniyomi because that is the ecosystem its packages come from, but the
  * API surface it provides is taken from the maintained hosts:
- *  - anime packages run against **Anikku**'s `animesource` API (extensions-lib 12-16),
+ *  - anime packages run against **Animiru**'s `animesource` API (extensions-lib 14, 16 and 17),
  *  - manga packages run against **Mihon**'s `source` API (extensions-lib 1.4-1.6).
  *
  * CloudStream is a separate backend; nothing here is shared with it except the bridge models.
@@ -84,13 +84,13 @@ class AniyomiBackend(
 
     override val info: BackendInfo = BackendInfo(
         type = BackendType.ANIYOMI,
-        implementationVersion = "1.1.0",
-        apiVersion = "anikku animesource 12..16, mihon source 1.4..1.6",
+        implementationVersion = "1.2.0",
+        apiVersion = "animiru animesource 14/16/17, mihon source 1.4..1.6",
         supportedExtensionKinds = listOf(
-            "Anikku anime extension APK (tachiyomi.animeextension)",
+            "Animiru anime extension APK (tachiyomi.animeextension)",
             "Mihon manga extension APK (tachiyomi.extension)",
         ),
-        notes = "Anime sources run against the Anikku API, manga sources against the Mihon API. " +
+        notes = "Anime sources run against the Animiru API, manga sources against the Mihon API. " +
             "Both are loaded child-first with PathClassLoader.",
     )
 
@@ -205,7 +205,22 @@ class AniyomiBackend(
         val loadedExtension = try {
             loader.load(target, info, repositoryId)
         } catch (e: Throwable) {
-            target.delete()
+            // The package arrived and is valid; only its code could not be instantiated. Keeping it
+            // on disk and listing it with the reason beats deleting it, which is what used to happen
+            // and left the Installed tab empty with no explanation.
+            val failure = loader.failedExtension(
+                info,
+                target,
+                ExtensionError(
+                    code = ErrorCode.EXTENSION_LOAD_FAILED,
+                    message = e.message ?: "Extension failed to load",
+                    details = e.javaClass.name,
+                    extensionId = extensionId,
+                    backend = BackendType.ANIYOMI,
+                ),
+            )
+            _installed.value = rebuildInstalledList().filterNot { it.id == extensionId } + failure
+            Log.e(TAG, "Installed ${info.packageName} but it failed to load; package kept", e)
             throw if (e is BackendException) e else BackendException(
                 "Extension installed but failed to load: ${e.message}",
                 ErrorCode.EXTENSION_LOAD_FAILED,
@@ -267,7 +282,7 @@ class AniyomiBackend(
             AniyomiPackage.isMangaLibVersionSupported(libVersion)
 
     // ---------------------------------------------------------------------------------------------
-    // Anime execution (Anikku API)
+    // Anime execution (Animiru API)
     // ---------------------------------------------------------------------------------------------
 
     override suspend fun search(extensionId: String, sourceId: String?, query: String, page: Int): List<Anime> {
