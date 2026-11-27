@@ -26,10 +26,10 @@ import okhttp3.Request
  *  - Mihon/Keiyoushi: `<repo>/repo.json` describes the store and points at `index_v2` (`index.pb`,
  *    a gzip compressed protobuf). The JSON `index.min.json` is now only a two-entry placeholder
  *    telling users to update the app, so it must not be used as the catalogue.
- *  - Aniyomi/Anikku anime repositories: a plain `index.min.json` array, `apk/` and `icon/` folders.
+ *  - Animiru/Aniyomi anime repositories: a plain `index.min.json` array, `apk/` and `icon/` folders.
  *
- * The client picks the descriptor when present and falls back to the legacy JSON index, so both
- * ecosystems keep working.
+ * The client accepts a directory URL, a `repo.json` URL or an `index.min.json` URL and picks the
+ * matching document, so pasting whichever link the repository page shows works.
  */
 internal class AniyomiRepositoryClient(private val http: OkHttpClient) {
 
@@ -49,32 +49,45 @@ internal class AniyomiRepositoryClient(private val http: OkHttpClient) {
     suspend fun fetch(repository: ExtensionRepository): List<RepositoryExtension> = withContext(Dispatchers.IO) {
         val url = repository.url.trimEnd('/')
 
-        // Direct protobuf index.
+        // A direct protobuf index.
         if (url.endsWith(".pb")) {
             return@withContext parseIndexBytes(repository, get(url))
         }
 
-        // Directory URL: Mihon/Keiyoushi publishes a descriptor that points at index_v2.
-        if (!url.endsWith(".json")) {
-            val descriptor = getOrNull("$url/repo.json")?.toString(Charsets.UTF_8)
-            val indexV2 = indexV2Of(descriptor)
-            if (indexV2 != null) {
-                return@withContext parseIndexBytes(repository, get(resolve(url, indexV2)))
-            }
+        // `repo.json` descriptor. It is looked up for a directory URL and used directly when the user
+        // pasted the descriptor itself, so `…/repo.json` and `…/` behave the same.
+        val descriptorUrl = if (url.endsWith(".json")) url else "$url/repo.json"
+        val descriptorBase = descriptorUrl.substringBeforeLast('/')
+        val descriptor = getOrNull(descriptorUrl)?.toString(Charsets.UTF_8)
+        indexV2Of(descriptor)?.let { indexV2 ->
+            return@withContext parseIndexBytes(repository, get(resolve(descriptorBase, indexV2)))
         }
 
-        val body = get(indexUrl(repository))
+        val jsonIndexUrl = if (url.endsWith(".json")) url else "$url/index.min.json"
+        val body = get(jsonIndexUrl)
         val text = body.toString(Charsets.UTF_8)
         when {
             text.trimStart().startsWith("[") -> parseLegacyJson(repository, text)
 
             text.trimStart().startsWith("{") -> {
-                val indexV2 = indexV2Of(text)
-                    ?: throw BackendException(
+                indexV2Of(text)?.let { indexV2 ->
+                    return@withContext parseIndexBytes(
+                        repository,
+                        get(resolve(jsonIndexUrl.substringBeforeLast('/'), indexV2)),
+                    )
+                }
+                // A descriptor without `index_v2` (legacy Aniyomi manifests): try the classic index
+                // next to it before giving up.
+                val sibling = getOrNull("${jsonIndexUrl.substringBeforeLast('/')}/index.min.json")
+                    ?.toString(Charsets.UTF_8)
+                if (sibling != null && sibling.trimStart().startsWith("[")) {
+                    parseLegacyJson(repository, sibling)
+                } else {
+                    throw BackendException(
                         "Repository ${repository.name} does not declare an index",
                         ErrorCode.REPOSITORY_INVALID,
                     )
-                parseIndexBytes(repository, get(resolve(baseUrl(repository), indexV2)))
+                }
             }
 
             else -> parseIndexBytes(repository, body)
