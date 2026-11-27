@@ -215,7 +215,7 @@ data class Video(
     val mpvArgs: List<Pair<String, String>> = emptyList(),
     val ffmpegStreamArgs: List<Pair<String, String>> = emptyList(),
     val ffmpegVideoArgs: List<Pair<String, String>> = emptyList(),
-    @Deprecated("Use memo instead", level = DeprecationLevel.ERROR)
+    @Deprecated("Use memo instead", level = DeprecationLevel.WARNING)
     val internalData: String = "",
     val initialized: Boolean = false,
     val memo: JsonObject = JsonObject(emptyMap()),
@@ -250,7 +250,11 @@ data class Video(
         videoUrl: String?,
         uri: android.net.Uri?,
         headers: Headers? = null,
-    ) : this(url, quality, videoUrl, headers)
+    ) : this(
+        videoTitle = quality,
+        videoUrl = videoUrl ?: "null",
+        headers = headers,
+    )
 
     override fun toString(): String = "Video(url='$videoUrl', title='$videoTitle')"
 }
@@ -260,7 +264,7 @@ class Hoster(
     val hosterUrl: String = "",
     val hosterName: String = "",
     val videoList: List<Video>? = null,
-    @Deprecated("Use memo instead", level = DeprecationLevel.ERROR)
+    @Deprecated("Use memo instead", level = DeprecationLevel.WARNING)
     val internalData: String = "",
     val lazy: Boolean = false,
     val memo: JsonObject = JsonObject(emptyMap()),

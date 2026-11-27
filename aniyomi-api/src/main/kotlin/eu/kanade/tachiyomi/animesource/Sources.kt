@@ -102,7 +102,7 @@ interface AnimeSource {
 /** Catalogue source: adds the source language. */
 interface AnimeCatalogueSource : AnimeSource {
 
-    override val lang: String
+    val lang: String
 }
 
 /** Sources that expose user-configurable preferences. */
