@@ -5,16 +5,19 @@ package eu.kanade.tachiyomi
  *
  * The runtime fills these in during backend initialisation so extensions that build a User-Agent or
  * compare versions see real values instead of a stub.
+ *
+ * The values live in properties that do not generate the `getVersionCode`/`getVersionName` JVM
+ * accessors the extensions-lib declares as functions.
  */
 object AppInfo {
 
     @Volatile
-    var versionCode: Int = 0
+    var hostVersionCode: Int = 0
 
     @Volatile
-    var versionName: String = "0"
+    var hostVersionName: String = "0"
 
-    fun getVersionCode(): Int = versionCode
+    fun getVersionCode(): Int = hostVersionCode
 
-    fun getVersionName(): String = versionName
+    fun getVersionName(): String = hostVersionName
 }
