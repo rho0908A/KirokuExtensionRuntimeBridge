@@ -36,7 +36,7 @@ internal class AniyomiLoadedExtension(
 }
 
 /**
- * Instantiates Aniyomi/Anikku anime and Mihon manga extension APKs.
+ * Instantiates Animiru anime and Mihon manga extension APKs.
  *
  * The extension code is loaded with a child-first [PathClassLoader]: the APK's own classes come
  * first (extensions often bundle Jsoup/OkHttp), while everything the extension only references —
@@ -113,7 +113,7 @@ internal class AniyomiExtensionLoader(private val context: Context) {
                 ExtensionSourceInfo(
                     id = source.id.toString(),
                     name = source.name,
-                    language = source.lang,
+                    language = catalogue?.lang,
                     baseUrl = (source as? AnimeHttpSource)?.baseUrl,
                     supportsSearch = catalogue != null,
                     supportsPopular = catalogue != null,
