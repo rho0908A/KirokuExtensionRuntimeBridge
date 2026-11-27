@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.kiroku.runtime.host.ui.theme.Accent
@@ -67,6 +68,27 @@ fun IconTile(icon: ImageVector, tint: Color = Accent, background: Color = CardDa
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+    }
+}
+
+/**
+ * Rounded-square app badge used by the manager cards (Aniyomi, CloudStream), so every repository
+ * group and extension list identifies its backend the same way.
+ */
+@Composable
+fun ManagerBadge(
+    icon: ImageVector,
+    tint: Color,
+    background: Color,
+    size: Dp = 34.dp,
+) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .background(background, RoundedCornerShape(size / 3f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(size * 0.56f))
     }
 }
 
