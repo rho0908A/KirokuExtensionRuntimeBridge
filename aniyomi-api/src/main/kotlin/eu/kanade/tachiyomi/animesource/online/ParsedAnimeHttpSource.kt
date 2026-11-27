@@ -6,14 +6,14 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.network.asJsoup
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 /**
- * Selector driven anime source, matching Aniyomi/Anikku's `ParsedAnimeHttpSource`.
+ * Selector driven anime source, matching Aniyomi/Animiru's `ParsedAnimeHttpSource`.
  *
  * Only the selectors are abstract in the real class; here they are open so packages built against
  * a different library generation still load.

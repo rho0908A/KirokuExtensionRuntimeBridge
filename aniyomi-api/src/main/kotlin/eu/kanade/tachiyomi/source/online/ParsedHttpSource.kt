@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.source.online
 
-import eu.kanade.tachiyomi.network.asJsoup
+import eu.kanade.tachiyomi.util.asJsoup
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -11,8 +11,8 @@ import org.jsoup.nodes.Element
 /**
  * Selector driven manga source, matching Mihon's `ParsedHttpSource`.
  *
- * The selector members are open (Anikku/Mihon mark several abstract) so that packages built
- * against a different extension-library generation still load.
+ * The selector members are open (Mihon marks several abstract) so that packages built against a
+ * different extension-library generation still load.
  */
 abstract class ParsedHttpSource : HttpSource() {
 

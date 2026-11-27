@@ -6,10 +6,12 @@ import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
+import eu.kanade.tachiyomi.animesource.model.ThumbnailInfo
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.NETWORK_CLIENT
 import eu.kanade.tachiyomi.network.awaitSuccess
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -17,11 +19,12 @@ import rx.Observable
 import rx.schedulers.Schedulers
 
 /**
- * Base class for HTTP backed anime sources, matching Anikku's `AnimeHttpSource`.
+ * Base class for HTTP backed anime sources, matching Animiru's `AnimeHttpSource`
+ * (Aniyomi extensions-lib v17).
  *
  * Extensions override the `*Request` / `*Parse` members and the runtime drives them. Every hook is
- * `open` rather than `abstract` where Anikku marks it abstract, so packages built against older
- * Aniyomi libraries (lib 12-15) still instantiate: calling a hook they never implemented returns
+ * `open` rather than `abstract` where the library marks it abstract, so packages built against
+ * older Aniyomi libraries (lib 14) still instantiate: calling a hook they never implemented returns
  * the safe default instead of `AbstractMethodError`.
  */
 abstract class AnimeHttpSource : AnimeCatalogueSource {
@@ -156,6 +159,39 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
     protected open fun videoListParse(response: Response, hoster: Hoster): List<Video> = hoster.videoList.orEmpty()
 
     open suspend fun resolveVideo(video: Video): Video? = video
+
+    /** Home page used by hosts when the user opens the source directly (lib 17). */
+    open fun getHomeUrl(): String = baseUrl
+
+    /** Sprite-sheet thumbnails for a video, when the source can produce them (lib 17). */
+    open suspend fun getVideoThumbnails(video: Video): ThumbnailInfo? = null
+
+    /** A single tile image, when the source serves them itself (lib 17). */
+    open suspend fun getImageTile(url: String): android.graphics.Bitmap? = null
+
+    /** Final playable URL for a video that needs resolving outside `getVideoList` (lib 17). */
+    open suspend fun getVideoUrl(video: Video): String = video.videoUrl
+
+    fun SEpisode.setUrlWithoutDomain(url: String) {
+        this.url = url.stripSchemeAndHost()
+    }
+
+    fun SAnime.setUrlWithoutDomain(url: String) {
+        this.url = url.stripSchemeAndHost()
+    }
+
+    open fun getAnimeUrl(anime: SAnime): String = anime.url
+
+    open fun getEpisodeUrl(episode: SEpisode): String = episode.url
+
+    /** Hook for sources that need to link a freshly created episode to its anime (lib 17). */
+    open fun prepareNewEpisode(episode: SEpisode, anime: SAnime) {}
+
+    private fun String.stripSchemeAndHost(): String {
+        val parsed = toHttpUrlOrNull() ?: return this
+        val query = parsed.query?.let { "?$it" }.orEmpty()
+        return parsed.encodedPath + query
+    }
 
     override fun fetchVideoList(episode: SEpisode): Observable<List<Video>> = rx { getVideoList(episode) }
 
